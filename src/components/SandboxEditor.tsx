@@ -33,7 +33,7 @@ export const SandboxEditor: React.FC<SandboxEditorProps> = ({
     });
   };
 
-  const handleSkillChange = (skillKey: 'skill1' | 'skill2', field: 'damage' | 'name', value: any) => {
+  const handleSkillChange = (skillKey: 'skill1' | 'skill2', field: 'damage' | 'heal' | 'name', value: any) => {
     onUpdateChar({
       ...char,
       [skillKey]: {
@@ -123,8 +123,10 @@ export const SandboxEditor: React.FC<SandboxEditorProps> = ({
       '보조무기대미지': c.secondaryWeapon?.damage || 0,
       '스킬1이름': c.skill1?.name || '',
       '스킬1대미지': c.skill1?.damage || 0,
+      '스킬1치유량': c.skill1?.heal || 0,
       '스킬2이름': c.skill2?.name || '',
-      '스킬2대미지': c.skill2?.damage || 0
+      '스킬2대미지': c.skill2?.damage || 0,
+      '스킬2치유량': c.skill2?.heal || 0
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(exportData);
@@ -413,51 +415,151 @@ export const SandboxEditor: React.FC<SandboxEditorProps> = ({
           </div>
         </div>
 
-        {/* 스킬 화력 */}
-        <div className="space-y-3 bg-[#23232a] p-3.5 rounded-xl border border-white/[0.08] shrink-0">
-          <span className="text-xs font-bold text-gray-200 flex items-center gap-1.5">
-            <Zap className="w-3.5 h-3.5 text-[#0d99ff] shrink-0" /> 스킬 화력
-          </span>
-
-          <div className="space-y-1">
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-gray-400 truncate max-w-[130px]">{char.skill1?.name || '스킬 1'}</span>
-              <input
-                type="number"
-                value={char.skill1?.damage || 0}
-                onChange={(e) => handleSkillChange('skill1', 'damage', Number(e.target.value))}
-                className="w-16 bg-black/40 border border-white/[0.08] rounded px-1.5 py-0.5 text-right font-numeric text-[#388bfd] text-xs"
-              />
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="200"
-              value={char.skill1?.damage || 0}
-              onChange={(e) => handleSkillChange('skill1', 'damage', Number(e.target.value))}
-              className="w-full accent-[#0d99ff] cursor-pointer"
-            />
+        {/* 액티브 스킬 효과 (대미지 & 힐) */}
+        <div className="space-y-4 bg-[#23232a] p-3.5 rounded-xl border border-white/[0.08] shrink-0">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-gray-200 flex items-center gap-1.5">
+              <Zap className="w-3.5 h-3.5 text-[#0d99ff] shrink-0" /> 액티브 스킬 효과 (대미지 & 힐)
+            </span>
           </div>
 
-          <div className="space-y-1">
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-gray-400 truncate max-w-[130px]">{char.skill2?.name || '스킬 2'}</span>
-              <input
-                type="number"
-                value={char.skill2?.damage || 0}
-                onChange={(e) => handleSkillChange('skill2', 'damage', Number(e.target.value))}
-                className="w-16 bg-black/40 border border-white/[0.08] rounded px-1.5 py-0.5 text-right font-numeric text-[#388bfd] text-xs"
-              />
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="200"
-              value={char.skill2?.damage || 0}
-              onChange={(e) => handleSkillChange('skill2', 'damage', Number(e.target.value))}
-              className="w-full accent-[#0d99ff] cursor-pointer"
-            />
-          </div>
+          {/* 스킬 1 편집 박스 */}
+          {(() => {
+            const s1Dmg = char.skill1?.damage || 0;
+            const s1Heal = char.skill1?.heal || 0;
+            const s1TypeBadge = s1Dmg > 0 && s1Heal > 0
+              ? { text: '복합 스킬', color: 'text-purple-400 bg-purple-500/10 border-purple-500/30' }
+              : s1Dmg > 0
+              ? { text: '공격 스킬', color: 'text-[#388bfd] bg-[#0d99ff]/10 border-[#0d99ff]/30' }
+              : s1Heal > 0
+              ? { text: '치유 스킬', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' }
+              : { text: '비대미지 유틸', color: 'text-amber-400 bg-amber-500/10 border-amber-500/30' };
+
+            return (
+              <div className="bg-black/30 p-2.5 rounded-lg border border-white/5 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white truncate max-w-[120px]">
+                    {char.skill1?.name || '스킬 1'}
+                  </span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded border ${s1TypeBadge.color}`}>
+                    {s1TypeBadge.text}
+                  </span>
+                </div>
+
+                {/* 대미지 조절 */}
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center text-[11px]">
+                    <span className="text-gray-400">공격 대미지 (DMG)</span>
+                    <input
+                      type="number"
+                      value={s1Dmg}
+                      onChange={(e) => handleSkillChange('skill1', 'damage', Number(e.target.value))}
+                      className="w-16 bg-black/40 border border-white/[0.08] rounded px-1.5 py-0.5 text-right font-numeric text-[#388bfd] text-xs"
+                    />
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="300"
+                    value={s1Dmg}
+                    onChange={(e) => handleSkillChange('skill1', 'damage', Number(e.target.value))}
+                    className="w-full accent-[#0d99ff] cursor-pointer"
+                  />
+                </div>
+
+                {/* 치유량 (힐) 조절 */}
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center text-[11px]">
+                    <span className="text-gray-400">치유량 (힐 회복)</span>
+                    <input
+                      type="number"
+                      value={s1Heal}
+                      onChange={(e) => handleSkillChange('skill1', 'heal', Number(e.target.value))}
+                      className="w-16 bg-black/40 border border-white/[0.08] rounded px-1.5 py-0.5 text-right font-numeric text-emerald-400 text-xs"
+                    />
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="500"
+                    step="10"
+                    value={s1Heal}
+                    onChange={(e) => handleSkillChange('skill1', 'heal', Number(e.target.value))}
+                    className="w-full accent-emerald-500 cursor-pointer"
+                  />
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* 스킬 2 편집 박스 */}
+          {(() => {
+            const s2Dmg = char.skill2?.damage || 0;
+            const s2Heal = char.skill2?.heal || 0;
+            const s2TypeBadge = s2Dmg > 0 && s2Heal > 0
+              ? { text: '복합 스킬', color: 'text-purple-400 bg-purple-500/10 border-purple-500/30' }
+              : s2Dmg > 0
+              ? { text: '공격 스킬', color: 'text-[#e5a93c] bg-[#e5a93c]/10 border-[#e5a93c]/30' }
+              : s2Heal > 0
+              ? { text: '치유 스킬', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' }
+              : { text: '비대미지 유틸', color: 'text-amber-400 bg-amber-500/10 border-amber-500/30' };
+
+            return (
+              <div className="bg-black/30 p-2.5 rounded-lg border border-white/5 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white truncate max-w-[120px]">
+                    {char.skill2?.name || '스킬 2'}
+                  </span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded border ${s2TypeBadge.color}`}>
+                    {s2TypeBadge.text}
+                  </span>
+                </div>
+
+                {/* 대미지 조절 */}
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center text-[11px]">
+                    <span className="text-gray-400">공격 대미지 (DMG)</span>
+                    <input
+                      type="number"
+                      value={s2Dmg}
+                      onChange={(e) => handleSkillChange('skill2', 'damage', Number(e.target.value))}
+                      className="w-16 bg-black/40 border border-white/[0.08] rounded px-1.5 py-0.5 text-right font-numeric text-[#e5a93c] text-xs"
+                    />
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="300"
+                    value={s2Dmg}
+                    onChange={(e) => handleSkillChange('skill2', 'damage', Number(e.target.value))}
+                    className="w-full accent-[#e5a93c] cursor-pointer"
+                  />
+                </div>
+
+                {/* 치유량 (힐) 조절 */}
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center text-[11px]">
+                    <span className="text-gray-400">치유량 (힐 회복)</span>
+                    <input
+                      type="number"
+                      value={s2Heal}
+                      onChange={(e) => handleSkillChange('skill2', 'heal', Number(e.target.value))}
+                      className="w-16 bg-black/40 border border-white/[0.08] rounded px-1.5 py-0.5 text-right font-numeric text-emerald-400 text-xs"
+                    />
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="500"
+                    step="10"
+                    value={s2Heal}
+                    onChange={(e) => handleSkillChange('skill2', 'heal', Number(e.target.value))}
+                    className="w-full accent-emerald-500 cursor-pointer"
+                  />
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
 

@@ -1,6 +1,9 @@
+export type SkillType = 'damage' | 'heal' | 'hybrid' | 'utility';
+
 export interface SkillInfo {
   name: string;
   damage: number;
+  heal?: number; // 치유량 (아군 또는 자가 회복)
   cooldown?: number;
   castTime?: number;
   description?: string;
@@ -65,16 +68,22 @@ export interface CombatEnv {
 }
 
 export interface TTKResult {
-  pureTtk: number;         // 1. 순수 평타 TTK
-  skill1ComboTtk: number;  // 2. 스킬 1 콤보 TTK
-  skill2ComboTtk: number;  // 3. 스킬 2 콤보 TTK
-  fullComboTtk: number;    // 4. 풀 콤보 TTK
+  pureTtk: number;            // 1. 순수 평타 TTK
+  skill1ComboTtk: number;     // 2. 스킬 1 콤보 TTK
+  skill2ComboTtk: number;     // 3. 스킬 2 콤보 TTK
+  fullComboTtk: number;       // 4. 풀 콤보 TTK
+  effectiveCombatTtk: number; // 5. 실질 교전 TTK (대미지 스킬 보유 유무 반영)
+
+  skill1Type: SkillType;
+  skill2Type: SkillType;
+  hasAnyDamageSkill: boolean;
+  totalSelfHeal: number;
 
   effectiveDmgPerBullet: number;
   shotsToKillPure: number;
   reloadsPure: number;
   
-  effectiveHp: number;     // 실질 생존력 (HP + 실드 반영 EHP)
+  effectiveHp: number;        // 실질 생존력 (HP + 실드 반영 EHP)
   dps: number;
   cycleDps: number;
 
@@ -90,10 +99,14 @@ export interface TTKResult {
 export interface DuelSideStats {
   id: string;
   name: string;
-  targetEffectiveHp: number; // 상대방의 EHP
+  targetEffectiveHp: number;  // 상대방의 EHP (힐 포함 실질 방어선)
   effectiveBulletDmg: number;
   pureTtk: number;
   fullComboTtk: number;
+  effectiveCombatTtk: number;
+  attackMethod: string;       // 실질 공격 방식
+  hasDamageSkill: boolean;
+  totalHeal: number;
   shotsToKill: number;
   reloads: number;
   dps: number;

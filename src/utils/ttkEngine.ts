@@ -130,6 +130,15 @@ export function calculateGunTimeToKill(
   };
 }
 
+export function getSkillType(skill?: { damage?: number; heal?: number }): 'damage' | 'heal' | 'hybrid' | 'utility' {
+  const dmg = Math.max(0, skill?.damage || 0);
+  const heal = Math.max(0, skill?.heal || 0);
+  if (dmg > 0 && heal > 0) return 'hybrid';
+  if (dmg > 0) return 'damage';
+  if (heal > 0) return 'heal';
+  return 'utility';
+}
+
 export function analyzeCharacter(char: Character, env: CombatEnv): TTKResult {
   const w = getActiveWeapon(char);
   const effectiveBulletDmg = getEffectiveDamagePerBullet(char, env.distance, env.headshotRate);
@@ -145,32 +154,63 @@ export function analyzeCharacter(char: Character, env: CombatEnv): TTKResult {
     w.isClosedChamber
   );
 
-  // 2. 스킬 1 콤보 TTK (소수점 2자리 0.xx)
   const skill1Dmg = Math.max(0, char.skill1?.damage || 0);
+  const skill1Heal = Math.max(0, char.skill1?.heal || 0);
   const s1CastTime = char.skill1?.castTime || 0;
-  const remHpS1 = Math.max(0, totalTargetHealth - skill1Dmg);
-  const s1GunTime = remHpS1 > 0 
-    ? calculateGunTimeToKill(remHpS1, effectiveBulletDmg, w.rpm, w.reloadTime, w.magazine, w.isClosedChamber).time 
-    : 0;
-  const skill1ComboTtk = Number((s1CastTime + s1GunTime).toFixed(2));
+  const s1Type = getSkillType(char.skill1);
 
-  // 3. 스킬 2 콤보 TTK (소수점 2자리 0.xx)
   const skill2Dmg = Math.max(0, char.skill2?.damage || 0);
+  const skill2Heal = Math.max(0, char.skill2?.heal || 0);
   const s2CastTime = char.skill2?.castTime || 0;
-  const remHpS2 = Math.max(0, totalTargetHealth - skill2Dmg);
-  const s2GunTime = remHpS2 > 0 
-    ? calculateGunTimeToKill(remHpS2, effectiveBulletDmg, w.rpm, w.reloadTime, w.magazine, w.isClosedChamber).time 
-    : 0;
-  const skill2ComboTtk = Number((s2CastTime + s2GunTime).toFixed(2));
+  const s2Type = getSkillType(char.skill2);
 
-  // 4. 풀 콤보 TTK (소수점 2자리 0.xx)
-  const comboDmg = skill1Dmg + skill2Dmg;
-  const comboCastTime = s1CastTime + s2CastTime;
-  const remHpFull = Math.max(0, totalTargetHealth - comboDmg);
-  const fullGunTime = remHpFull > 0
-    ? calculateGunTimeToKill(remHpFull, effectiveBulletDmg, w.rpm, w.reloadTime, w.magazine, w.isClosedChamber).time
-    : 0;
-  const fullComboTtk = Number((comboCastTime + fullGunTime).toFixed(2));
+  const hasDamageSkill1 = skill1Dmg > 0;
+  const hasDamageSkill2 = skill2Dmg > 0;
+  const hasAnyDamageSkill = hasDamageSkill1 || hasDamageSkill2;
+  const totalSelfHeal = skill1Heal + skill2Heal;
+
+  // 2. 스킬 1 콤보 TTK: 대미지 스킬일 때만 콤보 계산, 유틸/힐 스킬이면 순수 평타 유지 (지연 왜곡 방지)
+  let skill1ComboTtk = pureResult.time;
+  if (hasDamageSkill1) {
+    const remHpS1 = Math.max(0, totalTargetHealth - skill1Dmg);
+    const s1GunTime = remHpS1 > 0 
+      ? calculateGunTimeToKill(remHpS1, effectiveBulletDmg, w.rpm, w.reloadTime, w.magazine, w.isClosedChamber).time 
+      : 0;
+    skill1ComboTtk = Number((s1CastTime + s1GunTime).toFixed(2));
+  }
+
+  // 3. 스킬 2 콤보 TTK: 대미지 스킬일 때만 콤보 계산, 유틸/힐 스킬이면 순수 평타 유지
+  let skill2ComboTtk = pureResult.time;
+  if (hasDamageSkill2) {
+    const remHpS2 = Math.max(0, totalTargetHealth - skill2Dmg);
+    const s2GunTime = remHpS2 > 0 
+      ? calculateGunTimeToKill(remHpS2, effectiveBulletDmg, w.rpm, w.reloadTime, w.magazine, w.isClosedChamber).time 
+      : 0;
+    skill2ComboTtk = Number((s2CastTime + s2GunTime).toFixed(2));
+  }
+
+  // 4. 풀 콤보 TTK:
+  // - 둘 다 비대미지 스킬이면 순수 평타 TTK 유지
+  // - 스킬 1만 대미지 스킬이면 스킬 1 콤보 TTK 적용
+  // - 스킬 2만 대미지 스킬이면 스킬 2 콤보 TTK 적용
+  // - 둘 다 대미지 스킬이면 둘 다 합산한 풀 콤보 TTK 적용
+  let fullComboTtk = pureResult.time;
+  if (hasDamageSkill1 && hasDamageSkill2) {
+    const comboDmg = skill1Dmg + skill2Dmg;
+    const comboCastTime = s1CastTime + s2CastTime;
+    const remHpFull = Math.max(0, totalTargetHealth - comboDmg);
+    const fullGunTime = remHpFull > 0
+      ? calculateGunTimeToKill(remHpFull, effectiveBulletDmg, w.rpm, w.reloadTime, w.magazine, w.isClosedChamber).time
+      : 0;
+    fullComboTtk = Number((comboCastTime + fullGunTime).toFixed(2));
+  } else if (hasDamageSkill1) {
+    fullComboTtk = skill1ComboTtk;
+  } else if (hasDamageSkill2) {
+    fullComboTtk = skill2ComboTtk;
+  }
+
+  // 5. 실질 교전 TTK: 대미지 스킬이 있으면 최적 콤보 TTK, 없으면 순수 평타 TTK
+  const effectiveCombatTtk = hasAnyDamageSkill ? fullComboTtk : pureResult.time;
 
   // 실질 생존력 (EHP)
   const ehpModCapped = Math.min(0.95, Math.max(0, char.ehpMod || 0));
@@ -182,13 +222,13 @@ export function analyzeCharacter(char: Character, env: CombatEnv): TTKResult {
   const magEmptyTime = (w.magazine / (w.rpm / 60)) + w.reloadTime;
   const cycleDps = Number((magTotalDmg / magEmptyTime).toFixed(1));
 
-  // 레이더 지표 점수 (0 ~ 10 점수 표준화)
+  // 레이더 지표 점수 (0 ~ 10 점수 표준화) - 치유량(heal)과 유틸기 가산 반영
   const radar = {
-    offense: Number(Math.max(1, Math.min(10, (2.8 - pureResult.time) * 3.2 + (effectiveBulletDmg / 22))).toFixed(1)),
-    survival: Number(Math.max(1, Math.min(10, effectiveHp / 45)).toFixed(1)),
-    mobility: Number(Math.max(1, Math.min(10, (char.speed || 500) / 75)).toFixed(1)),
+    offense: Number(Math.max(1, Math.min(10, (2.8 - pureResult.time) * 3.2 + (effectiveBulletDmg / 22) + (hasAnyDamageSkill ? 0.5 : 0))).toFixed(1)),
+    survival: Number(Math.max(1, Math.min(10, (effectiveHp + totalSelfHeal * 1.2) / 45)).toFixed(1)),
+    mobility: Number(Math.max(1, Math.min(10, (char.speed || 500) / 75 + (s1Type === 'utility' ? 1.0 : 0))).toFixed(1)),
     difficulty: Number(Math.max(1, Math.min(10, (char.rpm / 120) + (char.rangeMax / 25))).toFixed(1)),
-    utility: Number(Math.max(1, Math.min(10, ((char.barrier || 0) / 30) + (skill1Dmg > 0 ? 3.5 : 1) + (skill2Dmg > 0 ? 3.5 : 1))).toFixed(1))
+    utility: Number(Math.max(1, Math.min(10, ((char.barrier || 0) / 30) + (totalSelfHeal / 25) + (s1Type !== 'damage' ? 2.5 : 1) + (s2Type !== 'damage' ? 2.5 : 1))).toFixed(1))
   };
 
   if (char.customRadar && char.customRadar.length === 5) {
@@ -204,6 +244,11 @@ export function analyzeCharacter(char: Character, env: CombatEnv): TTKResult {
     skill1ComboTtk,
     skill2ComboTtk,
     fullComboTtk,
+    effectiveCombatTtk,
+    skill1Type: s1Type,
+    skill2Type: s2Type,
+    hasAnyDamageSkill,
+    totalSelfHeal,
     effectiveDmgPerBullet: Number(effectiveBulletDmg.toFixed(1)),
     shotsToKillPure: pureResult.shots,
     reloadsPure: pureResult.reloads,
@@ -216,17 +261,22 @@ export function analyzeCharacter(char: Character, env: CombatEnv): TTKResult {
 
 /**
  * 1v1 상호 맞대결 (PvP Duel) 시뮬레이션
- * 캐릭터 A와 B가 서로를 타겟으로 지정하여 각자의 실질 체력(EHP)과 방어율, 거리 감쇄, 팰릿 수를 상호 적용
+ * 캐릭터 A와 B가 서로를 타겟으로 지정하여 각자의 실질 체력(EHP)과 자가 치유량(Heal), 방어율, 거리 감쇄, 팰릿 수를 상호 적용
+ * 대미지 스킬을 보유한 대상만 스킬 콤보 TTK로 공격하고, 미보유 대상은 순수 평타 TTK로 공정하게 결투 진행
  */
 export function simulateDuel(charA: Character, charB: Character, env: CombatEnv): DuelResult {
-  // A의 생존 EHP 및 B의 생존 EHP
+  // A의 생존 EHP 및 자가 치유 합산 실질 방어선
   const ehpModA = Math.min(0.95, Math.max(0, charA.ehpMod || 0));
   const ehpModB = Math.min(0.95, Math.max(0, charB.ehpMod || 0));
 
-  const targetEhpB = Math.round(((charB.hp || 0) + (charB.barrier || 0)) / (1 - ehpModB));
-  const targetEhpA = Math.round(((charA.hp || 0) + (charA.barrier || 0)) / (1 - ehpModA));
+  const healA = Math.max(0, charA.skill1?.heal || 0) + Math.max(0, charA.skill2?.heal || 0);
+  const healB = Math.max(0, charB.skill1?.heal || 0) + Math.max(0, charB.skill2?.heal || 0);
 
-  // A가 B를 공격할 때의 TTK 계산 (B의 EHP가 타겟 HP)
+  // 상대방이 꺾어야 하는 총 유효 체급 (체력 + 실드 + 힐량 반영)
+  const targetEhpB = Math.round(((charB.hp || 0) + (charB.barrier || 0) + healB) / (1 - ehpModB));
+  const targetEhpA = Math.round(((charA.hp || 0) + (charA.barrier || 0) + healA) / (1 - ehpModA));
+
+  // A가 B를 공격할 때의 TTK 계산 (B의 실질 EHP가 타겟 HP)
   const envForA: CombatEnv = {
     ...env,
     targetHp: targetEhpB,
@@ -234,7 +284,7 @@ export function simulateDuel(charA: Character, charB: Character, env: CombatEnv)
   };
   const resA = analyzeCharacter(charA, envForA);
 
-  // B가 A를 공격할 때의 TTK 계산 (A의 EHP가 타겟 HP)
+  // B가 A를 공격할 때의 TTK 계산 (A의 실질 EHP가 타겟 HP)
   const envForB: CombatEnv = {
     ...env,
     targetHp: targetEhpA,
@@ -242,9 +292,9 @@ export function simulateDuel(charA: Character, charB: Character, env: CombatEnv)
   };
   const resB = analyzeCharacter(charB, envForB);
 
-  // 승자 판정 (기본 풀 콤보 TTK 우선 비교, 동일 시 평타 TTK 비교)
-  const ttkA = resA.fullComboTtk > 0 ? resA.fullComboTtk : resA.pureTtk;
-  const ttkB = resB.fullComboTtk > 0 ? resB.fullComboTtk : resB.pureTtk;
+  // 공정 비교: 각 캐릭터가 보유한 유효 공격 수단의 실질 교전 TTK로 승패 판정
+  const ttkA = resA.effectiveCombatTtk;
+  const ttkB = resB.effectiveCombatTtk;
 
   const timeDiff = Math.abs(ttkA - ttkB);
   let winnerId: string | 'draw' = 'draw';
@@ -252,6 +302,17 @@ export function simulateDuel(charA: Character, charB: Character, env: CombatEnv)
   let winnerRemainingHp = 0;
   let winnerRemainingHpRatio = 0;
   let advantageReason = '양측 화력과 생존력이 거의 일치하여 동시 타격 가능성이 큽니다.';
+
+  // 공격 방식 라벨 결정
+  const getMethodLabel = (res: TTKResult) => {
+    if (!res.hasAnyDamageSkill) return '순수 평타 (비대미지 스킬군)';
+    if (res.skill1Type === 'damage' && res.skill2Type === 'damage') return '풀 콤보 (스킬 1+2)';
+    if (res.skill1Type === 'damage') return '스킬 1 콤보';
+    return '스킬 2 콤보';
+  };
+
+  const methodA = getMethodLabel(resA);
+  const methodB = getMethodLabel(resB);
 
   if (timeDiff < 0.05) {
     winnerId = 'draw';
@@ -264,14 +325,16 @@ export function simulateDuel(charA: Character, charB: Character, env: CombatEnv)
     winnerRemainingHp = Math.max(0, Math.round(targetEhpA - dmgTaken));
     winnerRemainingHpRatio = Math.round((winnerRemainingHp / targetEhpA) * 100);
 
-    if (timeDiff >= 0.5 && resA.dps > resB.dps * 1.3) {
-      advantageReason = `${charA.name}의 압도적인 순간 화력(DPS ${resA.dps})으로 초전 박살`;
-    } else if (targetEhpA > targetEhpB * 1.3) {
-      advantageReason = `${charA.name}의 단단한 체급(EHP ${targetEhpA})과 실드로 상대 맹공을 버텨내고 승리`;
-    } else if (resA.shotsToKillPure < resB.shotsToKillPure) {
-      advantageReason = `발당 결정력과 명중 시 타격 피해량 우위로 신속한 제압`;
+    if (healA > 0 && targetEhpA > targetEhpB) {
+      advantageReason = `${charA.name}의 치유력(힐 +${healA})과 탄탄한 유지력으로 상대 화력을 흡수하고 승리`;
+    } else if (resA.hasAnyDamageSkill && !resB.hasAnyDamageSkill && timeDiff >= 0.3) {
+      advantageReason = `${charA.name}의 강력한 액티브 스킬 콤보로 선제 결정타를 입혀 제압`;
+    } else if (timeDiff >= 0.5 && resA.dps > resB.dps * 1.25) {
+      advantageReason = `${charA.name}의 압도적인 지속 화력(DPS ${resA.dps})으로 초전 박살`;
+    } else if (targetEhpA > targetEhpB * 1.25) {
+      advantageReason = `${charA.name}의 단단한 체급(EHP ${targetEhpA})과 실드로 공격을 버텨내고 승리`;
     } else {
-      advantageReason = `0.${Math.round(timeDiff * 100)}초 차이의 근소한 반응/연계 속도 우위`;
+      advantageReason = `0.${Math.round(timeDiff * 100)}초 차이의 신속한 공격 연계 속도 우위`;
     }
   } else {
     winnerId = charB.id;
@@ -281,10 +344,14 @@ export function simulateDuel(charA: Character, charB: Character, env: CombatEnv)
     winnerRemainingHp = Math.max(0, Math.round(targetEhpB - dmgTaken));
     winnerRemainingHpRatio = Math.round((winnerRemainingHp / targetEhpB) * 100);
 
-    if (timeDiff >= 0.5 && resB.dps > resA.dps * 1.3) {
-      advantageReason = `${charB.name}의 강력한 연속 화력(DPS ${resB.dps})으로 신속한 제압`;
-    } else if (targetEhpB > targetEhpA * 1.3) {
-      advantageReason = `${charB.name}의 우수한 체급(EHP ${targetEhpB})으로 피해를 흡수하며 역전`;
+    if (healB > 0 && targetEhpB > targetEhpA) {
+      advantageReason = `${charB.name}의 치유력(힐 +${healB})과 자가 회복력으로 공세를 버텨내며 역전`;
+    } else if (resB.hasAnyDamageSkill && !resA.hasAnyDamageSkill && timeDiff >= 0.3) {
+      advantageReason = `${charB.name}의 스킬 폭딜 콤보가 적중하여 신속 제압`;
+    } else if (timeDiff >= 0.5 && resB.dps > resA.dps * 1.25) {
+      advantageReason = `${charB.name}의 강력한 지속 화력(DPS ${resB.dps})으로 제압`;
+    } else if (targetEhpB > targetEhpA * 1.25) {
+      advantageReason = `${charB.name}의 우수한 체급(EHP ${targetEhpB})으로 피해를 흡수하며 승리`;
     } else {
       advantageReason = `0.${Math.round(timeDiff * 100)}초 차이의 공격 타이밍 우세`;
     }
@@ -298,6 +365,10 @@ export function simulateDuel(charA: Character, charB: Character, env: CombatEnv)
       effectiveBulletDmg: resA.effectiveDmgPerBullet,
       pureTtk: resA.pureTtk,
       fullComboTtk: resA.fullComboTtk,
+      effectiveCombatTtk: ttkA,
+      attackMethod: methodA,
+      hasDamageSkill: resA.hasAnyDamageSkill,
+      totalHeal: healA,
       shotsToKill: resA.shotsToKillPure,
       reloads: resA.reloadsPure,
       dps: resA.dps
@@ -309,6 +380,10 @@ export function simulateDuel(charA: Character, charB: Character, env: CombatEnv)
       effectiveBulletDmg: resB.effectiveDmgPerBullet,
       pureTtk: resB.pureTtk,
       fullComboTtk: resB.fullComboTtk,
+      effectiveCombatTtk: ttkB,
+      attackMethod: methodB,
+      hasDamageSkill: resB.hasAnyDamageSkill,
+      totalHeal: healB,
       shotsToKill: resB.shotsToKillPure,
       reloads: resB.reloadsPure,
       dps: resB.dps

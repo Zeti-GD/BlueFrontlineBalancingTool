@@ -198,76 +198,147 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
     }
   };
 
-  // 세로 2단 행 구조의 완벽한 TTK 카드 (타이틀 잘림 0%, 숫자 겹침 0%)
+  // 스킬 상태 뱃지 생성 도우미
+  const getSkillBadgeMeta = (char: Character, skillIdx: 1 | 2) => {
+    const s = skillIdx === 1 ? char.skill1 : char.skill2;
+    const dmg = Math.max(0, s?.damage || 0);
+    const heal = Math.max(0, s?.heal || 0);
+    if (dmg > 0 && heal > 0) {
+      return { text: `복합 (${dmg} DMG / 힐 +${heal})`, isNonDamage: false, color: 'text-purple-400 bg-purple-500/10 border-purple-500/30' };
+    }
+    if (dmg > 0) {
+      return { text: `공격 (${dmg} DMG)`, isNonDamage: false, color: 'text-[#388bfd] bg-[#0d99ff]/10 border-[#0d99ff]/30' };
+    }
+    if (heal > 0) {
+      return { text: `치유 (힐 +${heal})`, isNonDamage: true, color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' };
+    }
+    return { text: `유틸리티 (비대미지)`, isNonDamage: true, color: 'text-amber-400 bg-amber-500/10 border-amber-500/30' };
+  };
+
+  const getComboBadgeMeta = (char: Character, res: TTKResult) => {
+    if (!res.hasAnyDamageSkill) {
+      if (res.totalSelfHeal > 0) {
+        return { text: `치유 전담 (힐 +${res.totalSelfHeal} / 평타 유지)`, isNonDamage: true, color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' };
+      }
+      return { text: `비대미지 유틸 (평타 유지)`, isNonDamage: true, color: 'text-amber-400 bg-amber-500/10 border-amber-500/30' };
+    }
+    const s1Dmg = Math.max(0, char.skill1?.damage || 0);
+    const s2Dmg = Math.max(0, char.skill2?.damage || 0);
+    if (s1Dmg > 0 && s2Dmg > 0) {
+      return { text: `풀 콤보 (합계 ${s1Dmg + s2Dmg} DMG)`, isNonDamage: false, color: 'text-purple-400 bg-purple-500/10 border-purple-500/30' };
+    }
+    if (s1Dmg > 0) {
+      return { text: `스킬 1 공격 (${s1Dmg} DMG) + 스킬 2 유틸`, isNonDamage: false, color: 'text-[#388bfd] bg-[#0d99ff]/10 border-[#0d99ff]/30' };
+    }
+    return { text: `스킬 1 유틸 + 스킬 2 공격 (${s2Dmg} DMG)`, isNonDamage: false, color: 'text-[#e5a93c] bg-[#e5a93c]/10 border-[#e5a93c]/30' };
+  };
+
+  // 세로 2단 행 구조의 완벽한 TTK 카드 (타이틀 잘림 0%, 숫자 겹침 0%, 비대미지/치유 스킬 대응)
   const renderTtkCard = (
     title: string,
     valSel: number,
     valCmp: number | undefined,
     desc: string,
-    icon: React.ReactNode
+    icon: React.ReactNode,
+    tagSel?: { text: string; isNonDamage: boolean; color: string },
+    tagCmp?: { text: string; isNonDamage: boolean; color: string }
   ) => {
     let diffText = '동일';
     let badgeClass = 'text-gray-400 bg-white/[0.04] border border-white/[0.08]';
 
     if (valCmp !== undefined) {
       const diff = Number((valSel - valCmp).toFixed(2));
+      const hasNonDamageDifference = tagSel?.isNonDamage !== tagCmp?.isNonDamage;
+      const basisPrefix = hasNonDamageDifference ? '실질 교전 기준: ' : '';
+
       if (diff < 0) {
-        diffText = `선택한 유닛이 ${Math.abs(diff).toFixed(2)}초 더 빠름`;
+        diffText = `${basisPrefix}선택한 유닛이 ${Math.abs(diff).toFixed(2)}초 더 빠름`;
         badgeClass = 'bg-[#0d99ff]/15 text-[#388bfd] border border-[#0d99ff]/30 shadow-sm';
       } else if (diff > 0) {
-        diffText = `비교 대상이 ${diff.toFixed(2)}초 더 빠름`;
+        diffText = `${basisPrefix}비교 대상이 ${diff.toFixed(2)}초 더 빠름`;
         badgeClass = 'bg-[#e5a93c]/15 text-[#e5a93c] border border-[#e5a93c]/30 shadow-sm';
       }
     }
 
     return (
       <div className="p-4 bg-[#161b22] border border-white/10 rounded-xl flex flex-col justify-between shadow-sm min-w-0">
-        {/* 상단: 타이틀 단독 행 (글자 잘림 원천 방지) */}
-        <div className="flex items-center gap-2 pb-2.5 border-b border-white/5">
-          {icon}
-          <span className="text-xs font-bold text-gray-100 tracking-wide">
-            {title}
-          </span>
+        {/* 상단: 타이틀 단독 행 */}
+        <div className="flex items-center justify-between pb-2.5 border-b border-white/5">
+          <div className="flex items-center gap-2">
+            {icon}
+            <span className="text-xs font-bold text-gray-100 tracking-wide">
+              {title}
+            </span>
+          </div>
+          {(tagSel?.isNonDamage || tagCmp?.isNonDamage) && (
+            <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-400 font-medium">
+              비대미지 평타 보정
+            </span>
+          )}
         </div>
 
-        {/* 본문: 세로 2단 행 구조 (각각 한 줄 전체를 써서 숫자 겹침 원천 방지) */}
+        {/* 본문: 세로 2단 행 구조 */}
         <div className="my-3 space-y-2 bg-black/40 p-2.5 rounded-lg border border-white/5">
           {/* 선택 캐릭터 행 */}
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 min-w-0 flex-1">
-              <span className="w-2 h-2 rounded-full bg-cyan-400 shrink-0" />
-              <span className="text-xs text-white font-bold whitespace-nowrap">
-                {selectedChar.name}
-              </span>
-              <span className="text-[10px] text-cyan-400/80 font-normal shrink-0">(선택)</span>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <span className="w-2 h-2 rounded-full bg-cyan-400 shrink-0" />
+                <span className="text-xs text-white font-bold whitespace-nowrap">
+                  {selectedChar.name}
+                </span>
+                <span className="text-[10px] text-cyan-400/80 font-normal shrink-0">(선택)</span>
+              </div>
+              <div className="flex items-baseline gap-1 shrink-0">
+                <span className="font-numeric text-lg font-extrabold text-cyan-400">
+                  {valSel.toFixed(2)}
+                </span>
+                <span className="text-xs text-gray-400 font-sans">초</span>
+              </div>
             </div>
-            <div className="flex items-baseline gap-1 shrink-0">
-              <span className="font-numeric text-lg font-extrabold text-cyan-400">
-                {valSel.toFixed(2)}
-              </span>
-              <span className="text-xs text-gray-400 font-sans">초</span>
-            </div>
+            {tagSel && (
+              <div className="flex items-center justify-between text-[10px] pl-4">
+                <span className={`px-1.5 py-0.2 rounded border ${tagSel.color}`}>
+                  {tagSel.text}
+                </span>
+                {tagSel.isNonDamage && (
+                  <span className="text-gray-400 font-sans">(순수 사격 유지)</span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* 비교 대상 캐릭터 행 */}
-          <div className="flex items-center justify-between gap-3 pt-2 border-t border-white/5">
-            <div className="flex items-center gap-2 min-w-0 flex-1">
-              <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
-              <span className="text-xs text-white font-bold whitespace-nowrap">
-                {compareChar ? compareChar.name : '비교 대상 없음'}
-              </span>
-              {compareChar && <span className="text-[10px] text-amber-400/80 font-normal shrink-0">(비교)</span>}
+          <div className="flex flex-col gap-1 pt-2 border-t border-white/5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+                <span className="text-xs text-white font-bold whitespace-nowrap">
+                  {compareChar ? compareChar.name : '비교 대상 없음'}
+                </span>
+                {compareChar && <span className="text-[10px] text-amber-400/80 font-normal shrink-0">(비교)</span>}
+              </div>
+              <div className="flex items-baseline gap-1 shrink-0">
+                <span className="font-numeric text-lg font-extrabold text-amber-400">
+                  {valCmp !== undefined ? valCmp.toFixed(2) : '-'}
+                </span>
+                {valCmp !== undefined && <span className="text-xs text-gray-400 font-sans">초</span>}
+              </div>
             </div>
-            <div className="flex items-baseline gap-1 shrink-0">
-              <span className="font-numeric text-lg font-extrabold text-amber-400">
-                {valCmp !== undefined ? valCmp.toFixed(2) : '-'}
-              </span>
-              {valCmp !== undefined && <span className="text-xs text-gray-400 font-sans">초</span>}
-            </div>
+            {compareChar && tagCmp && (
+              <div className="flex items-center justify-between text-[10px] pl-4">
+                <span className={`px-1.5 py-0.2 rounded border ${tagCmp.color}`}>
+                  {tagCmp.text}
+                </span>
+                {tagCmp.isNonDamage && (
+                  <span className="text-gray-400 font-sans">(순수 사격 유지)</span>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* 하단: 델타 결과 배지 (전체 너비 활용으로 글자 밖으로 빠져나옴 원천 차단) */}
+        {/* 하단: 델타 결과 배지 */}
         {valCmp !== undefined ? (
           <div className={`py-1 px-2.5 rounded text-center text-xs font-bold ${badgeClass}`}>
             {diffText}
@@ -353,7 +424,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
                   <th className="py-2.5 px-3">초당 화력 (DPS)</th>
                   <th className="py-2.5 px-3">평타 TTK ({env.distance}m)</th>
                   <th className="py-2.5 px-3">풀 콤보 TTK</th>
-                  <th className="py-2.5 px-3">스킬 화력 (1 / 2)</th>
+                  <th className="py-2.5 px-3">스킬 효과 (1 / 2)</th>
                   <th className="py-2.5 px-3 text-center">빠른 선택 / 비교</th>
                 </tr>
               </thead>
@@ -367,6 +438,16 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
                   let rowBg = 'hover:bg-white/[0.02]';
                   if (isSelected) rowBg = 'bg-[#0d99ff]/10 border-l-4 border-l-[#0d99ff]';
                   else if (isCompare) rowBg = 'bg-[#e5a93c]/10 border-l-4 border-l-[#e5a93c]';
+
+                  // 스킬 효과 텍스트 생성
+                  const formatSkillEffect = (s: typeof c.skill1) => {
+                    const dmg = Math.max(0, s?.damage || 0);
+                    const heal = Math.max(0, s?.heal || 0);
+                    if (dmg > 0 && heal > 0) return `${dmg}D/+${heal}H`;
+                    if (dmg > 0) return `${dmg}D`;
+                    if (heal > 0) return `힐 +${heal}`;
+                    return '유틸(0)';
+                  };
 
                   return (
                     <tr key={c.id} className={`${rowBg} transition`}>
@@ -387,6 +468,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
                       <td className="py-2.5 px-3">
                         <span className="text-white font-bold">{c.hp}</span>
                         {c.barrier ? <span className="text-[#388bfd]"> +{c.barrier}</span> : ''}
+                        {cStats.totalSelfHeal > 0 && <span className="text-emerald-400 text-[10px]"> (힐 +{cStats.totalSelfHeal})</span>}
                         <span className="text-gray-400 text-[11px] block">
                           EHP <b className="text-white">{cStats.effectiveHp}</b>
                         </span>
@@ -427,13 +509,16 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
                       {/* 풀 콤보 TTK */}
                       <td className="py-2.5 px-3">
                         <span className="text-purple-300 font-bold">{cStats.fullComboTtk}s</span>
+                        {!cStats.hasAnyDamageSkill && (
+                          <span className="text-[10px] text-amber-400/80 block font-sans">(평타 유지)</span>
+                        )}
                       </td>
 
-                      {/* 스킬 화력 */}
+                      {/* 스킬 화력 / 효과 */}
                       <td className="py-2.5 px-3 text-[11px]">
-                        <span className="text-[#388bfd] font-bold">{c.skill1?.damage || 0}</span>
+                        <span className="text-[#388bfd] font-bold">{formatSkillEffect(c.skill1)}</span>
                         <span className="text-gray-500"> / </span>
-                        <span className="text-[#e5a93c] font-bold">{c.skill2?.damage || 0}</span>
+                        <span className="text-[#e5a93c] font-bold">{formatSkillEffect(c.skill2)}</span>
                       </td>
 
                       {/* 조작 버튼 */}
@@ -563,16 +648,26 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
               {/* 양측 상호 타격 상세 스탯 (2열 그리드) */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                 {/* 왼쪽: A -> B 공격 */}
-                <div className="bg-[#1c1c22] border border-[#0d99ff]/25 rounded-xl p-3.5 space-y-2">
+                <div className="bg-[#1c1c22] border border-[#0d99ff]/25 rounded-xl p-3.5 space-y-2.5">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-[#388bfd] flex items-center gap-1.5">
                       <Crosshair className="w-3.5 h-3.5" /> {selectedChar.name}의 공세
                     </span>
                     <span className="text-[10px] text-gray-400">
-                      표적: {compareChar.name} (체급 {duelResult.charA.targetEffectiveHp} EHP)
+                      표적: {compareChar.name} (체급 {duelResult.charA.targetEffectiveHp} EHP{duelResult.charB.totalHeal > 0 ? ` [힐 +${duelResult.charB.totalHeal}]` : ''})
                     </span>
                   </div>
-                  <div className="grid grid-cols-3 gap-2 pt-1 font-numeric">
+
+                  <div className="flex items-center justify-between text-[11px] bg-black/30 px-2.5 py-1.5 rounded border border-white/5">
+                    <span className="text-gray-300 font-sans">
+                      공격 방식: <span className="text-white font-medium">{duelResult.charA.attackMethod}</span>
+                    </span>
+                    <span className="text-gray-400 font-sans">
+                      실질 TTK: <b className="text-[#388bfd] font-numeric">{duelResult.charA.effectiveCombatTtk}s</b>
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 pt-0.5 font-numeric">
                     <div className="bg-white/[0.03] p-2 rounded-lg text-center">
                       <span className="text-[10px] text-gray-400 block">발당 실질 대미지</span>
                       <span className="text-xs font-bold text-white">{duelResult.charA.effectiveBulletDmg}</span>
@@ -588,22 +683,32 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
                     <div className="bg-white/[0.03] p-2 rounded-lg text-center">
                       <span className="text-[10px] text-gray-400 block">풀 콤보 TTK</span>
                       <span className="text-xs font-bold text-[#388bfd]">{duelResult.charA.fullComboTtk}s</span>
-                      <span className="text-[9px] text-gray-500 block">(스킬+평타)</span>
+                      <span className="text-[9px] text-gray-500 block">{duelResult.charA.hasDamageSkill ? '(스킬+평타)' : '(비대미지/평타)'}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* 오른쪽: B -> A 공격 */}
-                <div className="bg-[#1c1c22] border border-[#e5a93c]/25 rounded-xl p-3.5 space-y-2">
+                <div className="bg-[#1c1c22] border border-[#e5a93c]/25 rounded-xl p-3.5 space-y-2.5">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-[#e5a93c] flex items-center gap-1.5">
                       <Crosshair className="w-3.5 h-3.5" /> {compareChar.name}의 공세
                     </span>
                     <span className="text-[10px] text-gray-400">
-                      표적: {selectedChar.name} (체급 {duelResult.charB.targetEffectiveHp} EHP)
+                      표적: {selectedChar.name} (체급 {duelResult.charB.targetEffectiveHp} EHP{duelResult.charA.totalHeal > 0 ? ` [힐 +${duelResult.charA.totalHeal}]` : ''})
                     </span>
                   </div>
-                  <div className="grid grid-cols-3 gap-2 pt-1 font-numeric">
+
+                  <div className="flex items-center justify-between text-[11px] bg-black/30 px-2.5 py-1.5 rounded border border-white/5">
+                    <span className="text-gray-300 font-sans">
+                      공격 방식: <span className="text-white font-medium">{duelResult.charB.attackMethod}</span>
+                    </span>
+                    <span className="text-gray-400 font-sans">
+                      실질 TTK: <b className="text-[#e5a93c] font-numeric">{duelResult.charB.effectiveCombatTtk}s</b>
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 pt-0.5 font-numeric">
                     <div className="bg-white/[0.03] p-2 rounded-lg text-center">
                       <span className="text-[10px] text-gray-400 block">발당 실질 대미지</span>
                       <span className="text-xs font-bold text-white">{duelResult.charB.effectiveBulletDmg}</span>
@@ -619,7 +724,7 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
                     <div className="bg-white/[0.03] p-2 rounded-lg text-center">
                       <span className="text-[10px] text-gray-400 block">풀 콤보 TTK</span>
                       <span className="text-xs font-bold text-[#e5a93c]">{duelResult.charB.fullComboTtk}s</span>
-                      <span className="text-[9px] text-gray-500 block">(스킬+평타)</span>
+                      <span className="text-[9px] text-gray-500 block">{duelResult.charB.hasDamageSkill ? '(스킬+평타)' : '(비대미지/평타)'}</span>
                     </div>
                   </div>
                 </div>
@@ -703,10 +808,40 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-            {renderTtkCard('1. 순수 평타 TTK', resSel.pureTtk, resCmp?.pureTtk, '무기 사격만으로 처치', <Gauge className="w-4 h-4 text-[#0d99ff] shrink-0" />)}
-            {renderTtkCard('2. 스킬 1 콤보 TTK', resSel.skill1ComboTtk, resCmp?.skill1ComboTtk, '스킬 1 적중 후 잔여 체력 평타', <Zap className="w-4 h-4 text-[#0d99ff] shrink-0" />)}
-            {renderTtkCard('3. 스킬 2 콤보 TTK', resSel.skill2ComboTtk, resCmp?.skill2ComboTtk, '스킬 2 적중 후 잔여 체력 평타', <Sparkles className="w-4 h-4 text-[#0d99ff] shrink-0" />)}
-            {renderTtkCard('4. 풀 콤보 TTK', resSel.fullComboTtk, resCmp?.fullComboTtk, '스킬 1+2 폭딜 후 잔여 체력 평타', <Swords className="w-4 h-4 text-[#0d99ff] shrink-0" />)}
+            {renderTtkCard(
+              '1. 순수 평타 TTK',
+              resSel.pureTtk,
+              resCmp?.pureTtk,
+              '무기 사격만으로 처치',
+              <Gauge className="w-4 h-4 text-[#0d99ff] shrink-0" />
+            )}
+            {renderTtkCard(
+              '2. 스킬 1 콤보 TTK',
+              resSel.skill1ComboTtk,
+              resCmp?.skill1ComboTtk,
+              '스킬 1 적중 후 잔여 체력 평타',
+              <Zap className="w-4 h-4 text-[#0d99ff] shrink-0" />,
+              getSkillBadgeMeta(selectedChar, 1),
+              compareChar ? getSkillBadgeMeta(compareChar, 1) : undefined
+            )}
+            {renderTtkCard(
+              '3. 스킬 2 콤보 TTK',
+              resSel.skill2ComboTtk,
+              resCmp?.skill2ComboTtk,
+              '스킬 2 적중 후 잔여 체력 평타',
+              <Sparkles className="w-4 h-4 text-[#0d99ff] shrink-0" />,
+              getSkillBadgeMeta(selectedChar, 2),
+              compareChar ? getSkillBadgeMeta(compareChar, 2) : undefined
+            )}
+            {renderTtkCard(
+              '4. 풀 콤보 TTK',
+              resSel.fullComboTtk,
+              resCmp?.fullComboTtk,
+              '가용 공격 스킬 콤보 후 잔여 체력 평타',
+              <Swords className="w-4 h-4 text-[#0d99ff] shrink-0" />,
+              getComboBadgeMeta(selectedChar, resSel),
+              compareChar && resCmp ? getComboBadgeMeta(compareChar, resCmp) : undefined
+            )}
           </div>
         </div>
       )}
@@ -784,6 +919,18 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
                   </td>
                 </tr>
                 <tr className="hover:bg-white/[0.02]">
+                  <td className="py-2.5 px-4 text-gray-300 font-sans">자가 치유량 (스킬 힐 합계)</td>
+                  <td className="py-2.5 px-4 text-emerald-400 font-bold">
+                    {resSel.totalSelfHeal > 0 ? `+${resSel.totalSelfHeal} HP` : '0 (치유 없음)'}
+                  </td>
+                  <td className="py-2.5 px-4 text-emerald-400 font-bold">
+                    {compareChar ? (resCmp && resCmp.totalSelfHeal > 0 ? `+${resCmp.totalSelfHeal} HP` : '0 (치유 없음)') : '-'}
+                  </td>
+                  <td className="py-2.5 px-4 text-gray-400">
+                    {resCmp ? `${resSel.totalSelfHeal - resCmp.totalSelfHeal > 0 ? '+' : ''}${resSel.totalSelfHeal - resCmp.totalSelfHeal}` : '-'}
+                  </td>
+                </tr>
+                <tr className="hover:bg-white/[0.02]">
                   <td className="py-2.5 px-4 text-gray-300 font-sans">이동 속도</td>
                   <td className="py-2.5 px-4 text-white font-bold">{selectedChar.speed}</td>
                   <td className="py-2.5 px-4 text-white font-bold">{compareChar?.speed ?? '-'}</td>
@@ -858,29 +1005,69 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
                   <td className="py-2.5 px-4 text-gray-400">-</td>
                 </tr>
 
-                {/* 스킬 관련 */}
+                {/* 스킬 관련 상세 효과 */}
                 <tr className="hover:bg-white/[0.02]">
-                  <td className="py-2.5 px-4 text-gray-300 font-sans">스킬 1 대미지</td>
+                  <td className="py-2.5 px-4 text-gray-300 font-sans">스킬 1 효과 (대미지 / 치유)</td>
                   <td className="py-2.5 px-4 text-[#388bfd] font-bold">
-                    {selectedChar.skill1 ? `${selectedChar.skill1.damage} (${selectedChar.skill1.name})` : '-'}
+                    {selectedChar.skill1 ? (
+                      <div>
+                        <span>{selectedChar.skill1.name}</span>
+                        <div className="text-[11px] font-normal text-gray-300 mt-0.5">
+                          {(selectedChar.skill1.damage || 0) > 0 && <span className="text-[#388bfd] font-bold">{selectedChar.skill1.damage} DMG </span>}
+                          {(selectedChar.skill1.heal || 0) > 0 && <span className="text-emerald-400 font-bold">+{selectedChar.skill1.heal} 힐 </span>}
+                          {!(selectedChar.skill1.damage || 0) && !(selectedChar.skill1.heal || 0) && <span className="text-amber-400 font-bold">비대미지 유틸기</span>}
+                        </div>
+                      </div>
+                    ) : '-'}
                   </td>
                   <td className="py-2.5 px-4 text-[#e5a93c] font-bold">
-                    {compareChar?.skill1 ? `${compareChar.skill1.damage} (${compareChar.skill1.name})` : '-'}
+                    {compareChar?.skill1 ? (
+                      <div>
+                        <span>{compareChar.skill1.name}</span>
+                        <div className="text-[11px] font-normal text-gray-300 mt-0.5">
+                          {(compareChar.skill1.damage || 0) > 0 && <span className="text-[#e5a93c] font-bold">{compareChar.skill1.damage} DMG </span>}
+                          {(compareChar.skill1.heal || 0) > 0 && <span className="text-emerald-400 font-bold">+{compareChar.skill1.heal} 힐 </span>}
+                          {!(compareChar.skill1.damage || 0) && !(compareChar.skill1.heal || 0) && <span className="text-amber-400 font-bold">비대미지 유틸기</span>}
+                        </div>
+                      </div>
+                    ) : '-'}
                   </td>
-                  <td className="py-2.5 px-4 text-gray-400">
-                    {compareChar ? `${(selectedChar.skill1?.damage || 0) - (compareChar.skill1?.damage || 0)}` : '-'}
+                  <td className="py-2.5 px-4 text-gray-400 text-[11px]">
+                    {compareChar ? (
+                      `${(selectedChar.skill1?.damage || 0) - (compareChar.skill1?.damage || 0)} DMG / ${(selectedChar.skill1?.heal || 0) - (compareChar.skill1?.heal || 0)} 힐`
+                    ) : '-'}
                   </td>
                 </tr>
                 <tr className="hover:bg-white/[0.02]">
-                  <td className="py-2.5 px-4 text-gray-300 font-sans">스킬 2 대미지</td>
+                  <td className="py-2.5 px-4 text-gray-300 font-sans">스킬 2 효과 (대미지 / 치유)</td>
                   <td className="py-2.5 px-4 text-[#388bfd] font-bold">
-                    {selectedChar.skill2 ? `${selectedChar.skill2.damage} (${selectedChar.skill2.name})` : '-'}
+                    {selectedChar.skill2 ? (
+                      <div>
+                        <span>{selectedChar.skill2.name}</span>
+                        <div className="text-[11px] font-normal text-gray-300 mt-0.5">
+                          {(selectedChar.skill2.damage || 0) > 0 && <span className="text-[#388bfd] font-bold">{selectedChar.skill2.damage} DMG </span>}
+                          {(selectedChar.skill2.heal || 0) > 0 && <span className="text-emerald-400 font-bold">+{selectedChar.skill2.heal} 힐 </span>}
+                          {!(selectedChar.skill2.damage || 0) && !(selectedChar.skill2.heal || 0) && <span className="text-amber-400 font-bold">비대미지 유틸기</span>}
+                        </div>
+                      </div>
+                    ) : '-'}
                   </td>
                   <td className="py-2.5 px-4 text-[#e5a93c] font-bold">
-                    {compareChar?.skill2 ? `${compareChar.skill2.damage} (${compareChar.skill2.name})` : '-'}
+                    {compareChar?.skill2 ? (
+                      <div>
+                        <span>{compareChar.skill2.name}</span>
+                        <div className="text-[11px] font-normal text-gray-300 mt-0.5">
+                          {(compareChar.skill2.damage || 0) > 0 && <span className="text-[#e5a93c] font-bold">{compareChar.skill2.damage} DMG </span>}
+                          {(compareChar.skill2.heal || 0) > 0 && <span className="text-emerald-400 font-bold">+{compareChar.skill2.heal} 힐 </span>}
+                          {!(compareChar.skill2.damage || 0) && !(compareChar.skill2.heal || 0) && <span className="text-amber-400 font-bold">비대미지 유틸기</span>}
+                        </div>
+                      </div>
+                    ) : '-'}
                   </td>
-                  <td className="py-2.5 px-4 text-gray-400">
-                    {compareChar ? `${(selectedChar.skill2?.damage || 0) - (compareChar.skill2?.damage || 0)}` : '-'}
+                  <td className="py-2.5 px-4 text-gray-400 text-[11px]">
+                    {compareChar ? (
+                      `${(selectedChar.skill2?.damage || 0) - (compareChar.skill2?.damage || 0)} DMG / ${(selectedChar.skill2?.heal || 0) - (compareChar.skill2?.heal || 0)} 힐`
+                    ) : '-'}
                   </td>
                 </tr>
               </tbody>
