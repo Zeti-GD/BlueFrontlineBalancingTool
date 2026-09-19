@@ -1,7 +1,10 @@
 @echo off
 title Blue Frontline Balancing Tool
 cd /d "%~dp0"
-if exist "release\win-unpacked\BlueFrontlineBalancingTool.exe" (
+if exist "BlueFrontlineBalancingTool.exe" (
+    echo Launching BlueFrontlineBalancingTool.exe...
+    start "" "BlueFrontlineBalancingTool.exe"
+) else if exist "release\win-unpacked\BlueFrontlineBalancingTool.exe" (
     echo Launching BlueFrontlineBalancingTool.exe...
     start "" "release\win-unpacked\BlueFrontlineBalancingTool.exe"
 ) else (
