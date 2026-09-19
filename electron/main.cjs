@@ -18,6 +18,7 @@ function createWindow() {
     minHeight: 520,
     backgroundColor: '#0a0c14',
     title: 'Blue Frontline Balancing Tool',
+    icon: path.join(__dirname, '../img/icon.png'),
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),

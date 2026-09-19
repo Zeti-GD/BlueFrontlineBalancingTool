@@ -46,11 +46,13 @@
     },
     "win": {
       "target": "portable",
+      "icon": "img/icon.ico",
       "signAndEditExecutable": false
     },
     "files": [
       "dist/**/*",
-      "electron/**/*"
+      "electron/**/*",
+      "img/**/*"
     ]
   }
 }

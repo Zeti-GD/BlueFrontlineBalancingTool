@@ -1,11 +1,11 @@
 import React from 'react';
 import { CombatEnv } from '../types/character';
-import { RefreshCw, Activity, PanelLeft, PanelRight } from 'lucide-react';
+import { RefreshCw, PanelLeft, PanelRight } from 'lucide-react';
 
 interface HeaderProps {
   env: CombatEnv;
   setEnv: React.Dispatch<React.SetStateAction<CombatEnv>>;
-  totalChars: number;
+  totalChars?: number;
   onResetEnv: () => void;
   isSidebarOpen?: boolean;
   onToggleSidebar?: () => void;
@@ -17,7 +17,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ 
   env, 
   setEnv, 
-  totalChars, 
+  totalChars: _totalChars, 
   onResetEnv,
   isSidebarOpen = true,
   onToggleSidebar,
@@ -32,20 +32,10 @@ export const Header: React.FC<HeaderProps> = ({
         {/* 컴팩트 상단 줄: 로고 + 초기화 버튼 */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-[#161b22] border border-cyan-500/40 flex items-center justify-center shadow-sm">
-              <Activity className="w-4 h-4 text-cyan-400" />
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="font-bold text-xs text-white tracking-wide">
-                  Blue Frontline
-                </span>
-                <span className="text-[9px] font-numeric px-1 py-0.2 rounded bg-cyan-950/70 text-cyan-300 border border-cyan-500/30">
-                  PRO
-                </span>
-              </div>
-              <p className="text-[10px] text-gray-400">밸런스 & TTK 시뮬레이터 ({totalChars}명)</p>
-            </div>
+            <img src="./img/icon.png" alt="icon" className="w-7 h-7 rounded-lg object-contain shadow-sm" />
+            <span className="font-bold text-xs text-white tracking-wide">
+              Blue Frontline 밸런싱 툴
+            </span>
           </div>
 
           <button
@@ -135,20 +125,10 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        <div className="w-9 h-9 rounded-xl bg-[#23232a] border border-[#0d99ff]/30 flex items-center justify-center shadow-sm">
-          <Activity className="w-5 h-5 text-[#0d99ff]" />
-        </div>
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-base text-white tracking-wide">
-              Blue Frontline
-            </span>
-            <span className="text-[10px] font-numeric px-1.5 py-0.5 rounded bg-[#0d99ff]/20 text-[#388bfd] border border-[#0d99ff]/30">
-              Balancing Tool
-            </span>
-          </div>
-          <p className="text-xs text-gray-400">게임 밸런스 및 대인전 TTK 분석기 ({totalChars}명)</p>
-        </div>
+        <img src="./img/icon.png" alt="icon" className="w-8 h-8 rounded-lg object-contain shadow-sm" />
+        <span className="font-bold text-base text-white tracking-wide">
+          Blue Frontline 밸런싱 툴
+        </span>
       </div>
 
       {/* 실시간 전투 환경 설정 바 (와이드 가로: 교전 거리 & 헤드샷율) */}
