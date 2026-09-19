@@ -12,7 +12,9 @@ import {
   GitCompare, 
   CheckCircle2,
   Gamepad2,
-  FolderOpen
+  FolderOpen,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import { fetchGoogleSheetCharacters } from '../utils/parsers/googleSheetParser';
 import { parseExcelOrCsvFile } from '../utils/parsers/excelParser';
@@ -48,6 +50,55 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const [pendingImports, setPendingImports] = useState<Character[] | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 선택 삭제 모드 및 선택된 ID 목록
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedDeleteIds, setSelectedDeleteIds] = useState<string[]>([]);
+
+  const handleToggleSelectId = (id: string) => {
+    setSelectedDeleteIds(prev => 
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAll = (filteredChars: Character[]) => {
+    if (selectedDeleteIds.length === filteredChars.length) {
+      setSelectedDeleteIds([]);
+    } else {
+      setSelectedDeleteIds(filteredChars.map(c => c.id));
+    }
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedDeleteIds.length === 0) return;
+    if (confirm(`선택한 ${selectedDeleteIds.length}명의 캐릭터를 삭제하시겠습니까?`)) {
+      const idsSet = new Set(selectedDeleteIds);
+      setCharacters(prev => {
+        const remaining = prev.filter(c => !idsSet.has(c.id));
+        if (idsSet.has(selectedCharId)) {
+          if (remaining.length > 0) onSelectChar(remaining[0].id);
+          else onSelectChar('');
+        }
+        if (compareCharId && idsSet.has(compareCharId)) {
+          onToggleCompare(compareCharId);
+        }
+        return remaining;
+      });
+      setSelectedDeleteIds([]);
+      setIsSelectMode(false);
+    }
+  };
+
+  const handleClearAll = () => {
+    if (characters.length === 0) return;
+    if (confirm(`등록된 전체 캐릭터(${characters.length}명)를 모두 삭제하시겠습니까?`)) {
+      setCharacters([]);
+      onSelectChar('');
+      if (compareCharId) onToggleCompare(compareCharId);
+      setSelectedDeleteIds([]);
+      setIsSelectMode(false);
+    }
+  };
 
   const handleLoadGoogleSheet = async () => {
     if (!googleUrl.trim()) return;
@@ -278,6 +329,70 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
+      {/* 캐릭터 목록 상단 관리 툴바 (목록 수, 선택 삭제, 전체 삭제) */}
+      <div className="px-3 py-2 border-b border-white/[0.08] flex items-center justify-between bg-[#23232a]/30">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] font-bold text-gray-300">
+            목록 ({filteredCharacters.length})
+          </span>
+          {isSelectMode && selectedDeleteIds.length > 0 && (
+            <span className="text-[10px] text-[#0d99ff] font-bold">
+              ({selectedDeleteIds.length}개 선택)
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1">
+          {isSelectMode ? (
+            <>
+              <button
+                onClick={() => handleSelectAll(filteredCharacters)}
+                className="px-2 py-0.5 rounded text-[10px] bg-white/5 hover:bg-white/10 text-gray-300 transition"
+              >
+                {selectedDeleteIds.length === filteredCharacters.length && filteredCharacters.length > 0
+                  ? '선택 해제'
+                  : '전체 선택'}
+              </button>
+              <button
+                onClick={handleDeleteSelected}
+                disabled={selectedDeleteIds.length === 0}
+                className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-600 hover:bg-red-500 text-white disabled:opacity-40 transition"
+              >
+                삭제 ({selectedDeleteIds.length})
+              </button>
+              <button
+                onClick={() => {
+                  setIsSelectMode(false);
+                  setSelectedDeleteIds([]);
+                }}
+                className="px-1.5 py-0.5 rounded text-[10px] text-gray-400 hover:text-white transition"
+              >
+                취소
+              </button>
+            </>
+          ) : (
+            <>
+              {characters.length > 0 && (
+                <>
+                  <button
+                    onClick={() => setIsSelectMode(true)}
+                    className="px-2 py-0.5 rounded text-[10px] font-medium bg-white/5 hover:bg-white/10 text-gray-300 border border-white/[0.08] hover:text-white transition"
+                  >
+                    선택 삭제
+                  </button>
+                  <button
+                    onClick={handleClearAll}
+                    className="px-2 py-0.5 rounded text-[10px] font-medium text-gray-400 hover:text-red-400 hover:bg-red-950/20 transition"
+                  >
+                    전체 삭제
+                  </button>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
       {/* 캐릭터 목록 */}
       <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
         {filteredCharacters.length === 0 ? (
@@ -288,13 +403,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
           filteredCharacters.map((char) => {
             const isSelected = char.id === selectedCharId;
             const isCompare = char.id === compareCharId;
+            const isCheckedForDelete = selectedDeleteIds.includes(char.id);
 
             return (
               <div
                 key={char.id}
-                onClick={() => onSelectChar(char.id)}
+                onClick={() => {
+                  if (isSelectMode) {
+                    handleToggleSelectId(char.id);
+                  } else {
+                    onSelectChar(char.id);
+                  }
+                }}
                 className={`p-3 rounded-xl border transition-all cursor-pointer flex flex-col gap-2 relative ${
-                  isSelected
+                  isSelectMode && isCheckedForDelete
+                    ? 'bg-[#23232a] border-red-500/80 shadow-[0_0_12px_rgba(239,68,68,0.15)] ring-1 ring-red-500/40'
+                    : isSelected
                     ? 'bg-[#23232a] border-[#0d99ff] shadow-[0_0_12px_rgba(13,153,255,0.18)] ring-1 ring-[#0d99ff]/50'
                     : isCompare
                     ? 'bg-[#23232a] border-[#e5a93c] shadow-[0_0_12px_rgba(229,169,60,0.18)] ring-1 ring-[#e5a93c]/50'
@@ -303,14 +427,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 {/* 상단 정보 및 뱃지/삭제 */}
                 <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-bold text-xs text-white tracking-wide">{char.name}</span>
-                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-white/5 text-gray-400 font-numeric">
-                        {char.weaponType || '무기'}
-                      </span>
+                  <div className="flex items-center gap-2">
+                    {/* 선택 삭제 모드 체크박스 */}
+                    {isSelectMode && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleSelectId(char.id);
+                        }}
+                        className="text-gray-400 hover:text-white transition shrink-0"
+                      >
+                        {isCheckedForDelete ? (
+                          <CheckSquare className="w-4 h-4 text-red-400" />
+                        ) : (
+                          <Square className="w-4 h-4 text-gray-500" />
+                        )}
+                      </button>
+                    )}
+
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-xs text-white tracking-wide">{char.name}</span>
+                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-white/5 text-gray-400 font-numeric">
+                          {char.weaponType || '무기'}
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-gray-400">{char.position}</span>
                     </div>
-                    <span className="text-[11px] text-gray-400">{char.position}</span>
                   </div>
 
                   <div className="flex items-center gap-1.5">

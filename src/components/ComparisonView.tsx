@@ -50,11 +50,11 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
   onToggleCompare
 }) => {
   const [visibleSections, setVisibleSections] = useState({
-    duel: true,
-    ttkCards: true,
-    charts: true,
-    statsTable: true,
-    matrix: true
+    duel: false,
+    ttkCards: false,
+    charts: false,
+    statsTable: false,
+    matrix: false
   });
 
   const toggleSection = (key: keyof typeof visibleSections) => {
@@ -63,8 +63,9 @@ export const ComparisonView: React.FC<ComparisonViewProps> = ({
 
   if (!selectedChar) {
     return (
-      <div className="flex-1 flex items-center justify-center text-gray-500 font-numeric text-sm">
-        분석할 캐릭터를 좌측 목록에서 선택해주세요.
+      <div className="flex-1 flex flex-col items-center justify-center text-gray-500 font-sans text-sm gap-2 p-8 text-center">
+        <p className="text-gray-300 font-bold text-base">등록된 캐릭터가 없습니다</p>
+        <p className="text-xs text-gray-400">좌측 패널에서 🎮 에셋 동기화 버튼을 누르거나 구글 시트, 엑셀/CSV 파일을 불러와주세요.</p>
       </div>
     );
   }

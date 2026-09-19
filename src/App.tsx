@@ -8,9 +8,9 @@ import { SandboxEditor } from './components/SandboxEditor';
 import { Users, BarChart3, Sliders } from 'lucide-react';
 
 export const App: React.FC = () => {
-  const [characters, setCharacters] = useState<Character[]>(INITIAL_CHARACTERS);
-  const [selectedCharId, setSelectedCharId] = useState<string>('Aru');
-  const [compareCharId, setCompareCharId] = useState<string | null>('Izuna');
+  const [characters, setCharacters] = useState<Character[]>([]);
+  const [selectedCharId, setSelectedCharId] = useState<string>('');
+  const [compareCharId, setCompareCharId] = useState<string | null>(null);
   
   // 패널 토글 상태 (와이드 화면용)
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
