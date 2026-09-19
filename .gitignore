@@ -1,0 +1,22 @@
+# Node modules
+node_modules/
+
+# Production build and release outputs
+dist/
+release/
+*.exe
+
+# Logs and debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# TypeScript cache
+*.tsbuildinfo
+
+# OS / Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,120 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-deep: #0a0c14;
+  --bg-card: #161b22;
+  --bg-panel: #0d1117;
+  --accent-cyan: #00f2ff;
+  --accent-amber: #ffaa00;
+  --accent-red: #ff4d4d;
+  --accent-green: #00ff88;
+  --accent-purple: #bb86fc;
+  --border-color: rgba(0, 242, 255, 0.15);
+  --text-main: #e6edf3;
+  --text-dim: #8b949e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-deep);
+  color: var(--text-main);
+  font-family: 'Pretendard', 'Malgun Gothic', '맑은 고딕', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 커스텀 스크롤바 */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.25);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 242, 255, 0.25);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 242, 255, 0.6);
+}
+
+/* 커스텀 슬라이더 스타일 (조절점 중앙 정렬 보정) */
+input[type=range] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  outline: none;
+  cursor: pointer;
+  height: 20px;
+  display: flex;
+  align-items: center;
+}
+input[type=range]::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  cursor: pointer;
+  box-shadow: 0 0 6px var(--accent-cyan);
+  margin-top: -4.5px;
+  border: 1.5px solid #ffffff;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+input[type=range]::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 10px var(--accent-cyan);
+}
+
+.slider-amber::-webkit-slider-thumb {
+  background: var(--accent-amber);
+  box-shadow: 0 0 6px var(--accent-amber);
+}
+.slider-green::-webkit-slider-thumb {
+  background: var(--accent-green);
+  box-shadow: 0 0 6px var(--accent-green);
+}
+.slider-purple::-webkit-slider-thumb {
+  background: var(--accent-purple);
+  box-shadow: 0 0 6px var(--accent-purple);
+}
+
+/* 숫자 폰트용 클래스 */
+.font-numeric {
+  font-family: 'JetBrains Mono', 'Consolas', 'Segoe UI', monospace;
+  letter-spacing: 0.02em;
+}
+
+/* 네온 텍스트 효과 */
+.neon-cyan {
+  text-shadow: 0 0 10px rgba(0, 242, 255, 0.4);
+}
+.neon-amber {
+  text-shadow: 0 0 10px rgba(255, 170, 0, 0.4);
+}
+.neon-green {
+  text-shadow: 0 0 10px rgba(0, 255, 136, 0.4);
+}
+.neon-purple {
+  text-shadow: 0 0 10px rgba(187, 134, 252, 0.4);
+}

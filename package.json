@@ -1,0 +1,56 @@
+{
+  "name": "blue-frontline-balance",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "electron:dev": "concurrently \"vite\" \"wait-on tcp:5173 && electron electron/main.cjs\"",
+    "electron:build": "npm run build && electron-builder"
+  },
+  "dependencies": {
+    "chart.js": "^4.4.8",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.16.0",
+    "papaparse": "^5.5.3",
+    "react": "^19.0.0",
+    "react-chartjs-2": "^5.3.0",
+    "react-dom": "^19.0.0",
+    "tailwind-merge": "^3.0.2",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.9",
+    "@types/papaparse": "^5.3.15",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.21",
+    "concurrently": "^9.1.2",
+    "electron": "^35.0.0",
+    "electron-builder": "^25.1.8",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^3.4.17",
+    "typescript": "~5.7.2",
+    "vite": "^6.2.0",
+    "wait-on": "^8.0.2"
+  },
+  "build": {
+    "appId": "com.bluefrontline.balance",
+    "productName": "BlueFrontlineBalancingTool",
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": "portable",
+      "signAndEditExecutable": false
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ]
+  }
+}
