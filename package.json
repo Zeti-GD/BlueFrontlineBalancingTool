@@ -48,8 +48,7 @@
     },
     "win": {
       "target": "portable",
-      "icon": "build/icon.ico",
-      "signAndEditExecutable": false
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "installerIcon": "build/icon.ico",
