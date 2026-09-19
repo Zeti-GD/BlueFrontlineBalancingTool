@@ -34,6 +34,25 @@ export const SandboxEditor: React.FC<SandboxEditorProps> = ({
   };
 
   const handleSkillChange = (skillKey: 'skill1' | 'skill2', field: 'damage' | 'heal' | 'name', value: any) => {
+    if (skillKey === 'skill2' && char.skill2?.variants && char.skill2.variants.length > 0) {
+      const activeIdx = char.activeWeaponIndex || 0;
+      const updatedVariants = char.skill2.variants.map(v => {
+        if (v.modeIndex === activeIdx) {
+          return { ...v, [field]: value };
+        }
+        return v;
+      });
+      onUpdateChar({
+        ...char,
+        skill2: {
+          ...char.skill2,
+          [field]: value,
+          variants: updatedVariants
+        }
+      });
+      return;
+    }
+
     onUpdateChar({
       ...char,
       [skillKey]: {
@@ -425,9 +444,14 @@ export const SandboxEditor: React.FC<SandboxEditorProps> = ({
 
           {/* 스킬 1 편집 박스 */}
           {(() => {
-            const s1Dmg = char.skill1?.damage || 0;
-            const s1Heal = char.skill1?.heal || 0;
-            const s1TypeBadge = s1Dmg > 0 && s1Heal > 0
+            const s1 = char.skill1;
+            const s1Dmg = s1?.damage || 0;
+            const s1Heal = s1?.heal || 0;
+            const s1TypeBadge = s1?.isStanceSwitch
+              ? { text: '태세 전환', color: 'text-amber-400 bg-amber-500/10 border-amber-500/30' }
+              : s1?.skillRole === 'dash'
+              ? { text: '이동기 (대시)', color: 'text-sky-400 bg-sky-500/10 border-sky-500/30' }
+              : s1Dmg > 0 && s1Heal > 0
               ? { text: '복합 스킬', color: 'text-purple-400 bg-purple-500/10 border-purple-500/30' }
               : s1Dmg > 0
               ? { text: '공격 스킬', color: 'text-[#388bfd] bg-[#0d99ff]/10 border-[#0d99ff]/30' }
@@ -437,66 +461,92 @@ export const SandboxEditor: React.FC<SandboxEditorProps> = ({
 
             return (
               <div className="bg-black/30 p-2.5 rounded-lg border border-white/5 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-white truncate max-w-[120px]">
-                    {char.skill1?.name || '스킬 1'}
-                  </span>
+                <div className="flex items-center justify-between flex-wrap gap-1">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-xs font-bold text-white truncate max-w-[120px]">
+                      {s1?.name || '스킬 1'}
+                    </span>
+                    {s1?.assetName && (
+                      <span className="text-[9px] px-1 py-0.2 rounded bg-white/5 text-gray-400 font-mono">
+                        [{s1.assetName}]
+                      </span>
+                    )}
+                  </div>
                   <span className={`text-[10px] px-1.5 py-0.5 rounded border ${s1TypeBadge.color}`}>
                     {s1TypeBadge.text}
                   </span>
                 </div>
 
-                {/* 대미지 조절 */}
-                <div className="space-y-1">
-                  <div className="flex justify-between items-center text-[11px]">
-                    <span className="text-gray-400">공격 대미지 (DMG)</span>
-                    <input
-                      type="number"
-                      value={s1Dmg}
-                      onChange={(e) => handleSkillChange('skill1', 'damage', Number(e.target.value))}
-                      className="w-16 bg-black/40 border border-white/[0.08] rounded px-1.5 py-0.5 text-right font-numeric text-[#388bfd] text-xs"
-                    />
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="300"
-                    value={s1Dmg}
-                    onChange={(e) => handleSkillChange('skill1', 'damage', Number(e.target.value))}
-                    className="w-full accent-[#0d99ff] cursor-pointer"
-                  />
-                </div>
+                {s1?.isStanceSwitch ? (
+                  <p className="text-[11px] text-gray-400 bg-white/[0.02] p-2 rounded border border-white/5">
+                    모드 상호 전환 스킬 (스킬 2 및 장착 무기를 전환합니다)
+                  </p>
+                ) : (
+                  <>
+                    {/* 대미지 조절 */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-[11px]">
+                        <span className="text-gray-400">공격 대미지 (DMG)</span>
+                        <input
+                          type="number"
+                          value={s1Dmg}
+                          onChange={(e) => handleSkillChange('skill1', 'damage', Number(e.target.value))}
+                          className="w-16 bg-black/40 border border-white/[0.08] rounded px-1.5 py-0.5 text-right font-numeric text-[#388bfd] text-xs"
+                        />
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="300"
+                        value={s1Dmg}
+                        onChange={(e) => handleSkillChange('skill1', 'damage', Number(e.target.value))}
+                        className="w-full accent-[#0d99ff] cursor-pointer"
+                      />
+                    </div>
 
-                {/* 치유량 (힐) 조절 */}
-                <div className="space-y-1">
-                  <div className="flex justify-between items-center text-[11px]">
-                    <span className="text-gray-400">치유량 (힐 회복)</span>
-                    <input
-                      type="number"
-                      value={s1Heal}
-                      onChange={(e) => handleSkillChange('skill1', 'heal', Number(e.target.value))}
-                      className="w-16 bg-black/40 border border-white/[0.08] rounded px-1.5 py-0.5 text-right font-numeric text-emerald-400 text-xs"
-                    />
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="500"
-                    step="10"
-                    value={s1Heal}
-                    onChange={(e) => handleSkillChange('skill1', 'heal', Number(e.target.value))}
-                    className="w-full accent-emerald-500 cursor-pointer"
-                  />
-                </div>
+                    {/* 치유량 (힐) 조절 */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-[11px]">
+                        <span className="text-gray-400">치유량 (힐 회복)</span>
+                        <input
+                          type="number"
+                          value={s1Heal}
+                          onChange={(e) => handleSkillChange('skill1', 'heal', Number(e.target.value))}
+                          className="w-16 bg-black/40 border border-white/[0.08] rounded px-1.5 py-0.5 text-right font-numeric text-emerald-400 text-xs"
+                        />
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="500"
+                        step="10"
+                        value={s1Heal}
+                        onChange={(e) => handleSkillChange('skill1', 'heal', Number(e.target.value))}
+                        className="w-full accent-emerald-500 cursor-pointer"
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             );
           })()}
 
-          {/* 스킬 2 편집 박스 */}
+          {/* 스킬 2 편집 박스 (가변 스킬 연동) */}
           {(() => {
-            const s2Dmg = char.skill2?.damage || 0;
-            const s2Heal = char.skill2?.heal || 0;
-            const s2TypeBadge = s2Dmg > 0 && s2Heal > 0
+            const hasVariants = char.skill2?.variants && char.skill2.variants.length > 0;
+            const activeIdx = char.activeWeaponIndex || 0;
+            const currentVariant = hasVariants
+              ? (char.skill2.variants!.find(v => v.modeIndex === activeIdx) || char.skill2.variants![0])
+              : null;
+
+            const s2Name = currentVariant ? currentVariant.name : (char.skill2?.name || '스킬 2');
+            const s2Dmg = currentVariant ? currentVariant.damage : (char.skill2?.damage || 0);
+            const s2Heal = currentVariant ? (currentVariant.heal || 0) : (char.skill2?.heal || 0);
+            const s2AssetName = currentVariant ? currentVariant.assetName : char.skill2?.assetName;
+
+            const s2TypeBadge = hasVariants
+              ? { text: `가변 (${activeIdx === 1 ? '방패/권총' : '산탄총'})`, color: 'text-purple-400 bg-purple-500/10 border-purple-500/30' }
+              : s2Dmg > 0 && s2Heal > 0
               ? { text: '복합 스킬', color: 'text-purple-400 bg-purple-500/10 border-purple-500/30' }
               : s2Dmg > 0
               ? { text: '공격 스킬', color: 'text-[#e5a93c] bg-[#e5a93c]/10 border-[#e5a93c]/30' }
@@ -506,14 +556,43 @@ export const SandboxEditor: React.FC<SandboxEditorProps> = ({
 
             return (
               <div className="bg-black/30 p-2.5 rounded-lg border border-white/5 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-white truncate max-w-[120px]">
-                    {char.skill2?.name || '스킬 2'}
-                  </span>
+                <div className="flex items-center justify-between flex-wrap gap-1">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-xs font-bold text-white truncate max-w-[130px]">
+                      {s2Name}
+                    </span>
+                    {s2AssetName && (
+                      <span className="text-[9px] px-1 py-0.2 rounded bg-white/5 text-gray-400 font-mono">
+                        [{s2AssetName}]
+                      </span>
+                    )}
+                  </div>
                   <span className={`text-[10px] px-1.5 py-0.5 rounded border ${s2TypeBadge.color}`}>
                     {s2TypeBadge.text}
                   </span>
                 </div>
+
+                {hasVariants && (
+                  <div className="flex items-center gap-1 bg-white/[0.04] p-1 rounded text-[10px]">
+                    <span className="text-gray-400 px-1">조절 태세:</span>
+                    {char.skill2.variants!.map((v) => (
+                      <button
+                        key={v.modeIndex}
+                        onClick={() => {
+                          handleChange('activeWeaponIndex', v.modeIndex);
+                          setEditingWeaponIndex(v.modeIndex as 0 | 1);
+                        }}
+                        className={`px-2 py-0.5 rounded font-medium transition ${
+                          activeIdx === v.modeIndex
+                            ? 'bg-[#0d99ff]/20 text-[#388bfd] border border-[#0d99ff]/40'
+                            : 'text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        {v.modeName}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 {/* 대미지 조절 */}
                 <div className="space-y-1">

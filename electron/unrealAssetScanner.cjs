@@ -143,16 +143,15 @@ function scanUnrealProject(projectOrContentPath) {
   const izunaRpmPath = findAsset(p => p.includes('izunaselectorlever'));
   const izunaDmgPath = findAsset(p => p.includes('izunasmgbulletdamage'));
   const izunaMagPath = findAsset(p => p.includes('izunamagazine'));
-  const izunaSkill1Path = findAsset(p => p.includes('izunashurikendamage.uasset'));
-  const izunaSkill2Path = findAsset(p => p.includes('izunashurikenexplosiondamage'));
+  // 패시브 MFA_WallClimb.uasset 등은 제외하고 정확한 액티브 스킬 식별
+  const izunaDashPath = findAsset(p => p.includes('bp_izunadashability') || (p.includes('izunadash') && !p.includes('mfa')));
+  const izunaMultiShurikenPath = findAsset(p => p.includes('ga_equipmultishuriken') || p.includes('multishuriken'));
 
-  if (izunaDmgPath || izunaRpmPath || izunaHealthPath) {
+  if (izunaDmgPath || izunaRpmPath || izunaHealthPath || izunaDashPath) {
     const hp = izunaHealthPath ? extractHealthValue(izunaHealthPath, 150) : 150;
     const rpm = izunaRpmPath ? extractRpmValue(izunaRpmPath, 575) : 575;
     const damage = izunaDmgPath ? extractFloatValue(izunaDmgPath, 22) : 22;
     const mag = izunaMagPath ? extractMagValue(izunaMagPath, 30) : 30;
-    const s1Dmg = izunaSkill1Path ? extractFloatValue(izunaSkill1Path, 10) : 10;
-    const s2Dmg = izunaSkill2Path ? extractFloatValue(izunaSkill2Path, 30) : 30;
 
     parsedCharacters.push({
       id: "Izuna",
@@ -177,18 +176,26 @@ function scanUnrealProject(projectOrContentPath) {
       hasSecondaryWeapon: false,
       activeWeaponIndex: 0,
       skill1: {
-        name: "수리검 투척",
-        damage: s1Dmg,
-        cooldown: 12,
-        castTime: 0.2
+        name: "닌자 대시 (Dash)",
+        damage: 0,
+        heal: 0,
+        cooldown: 8,
+        castTime: 0.2,
+        assetName: izunaDashPath ? path.basename(izunaDashPath) : "BP_IzunaDashAbility.uasset",
+        skillRole: "dash",
+        description: "지정 방향으로 고속 대시하여 적의 사선을 회피하고 거리를 좁힙니다. (비대미지 이동기)"
       },
       skill2: {
-        name: "비기! 벚꽃 연막술 (폭발)",
-        damage: s2Dmg,
-        cooldown: 18,
-        castTime: 0.4
+        name: "멀티 수리검 (연막/섬광)",
+        damage: 0,
+        heal: 0,
+        cooldown: 16,
+        castTime: 0.3,
+        assetName: izunaMultiShurikenPath ? path.basename(izunaMultiShurikenPath) : "GA_EquipMultiShuriken.uasset",
+        skillRole: "utility",
+        description: "2종류의 수리검(연막/섬광) 중 하나를 선택 투척합니다. 대미지는 없으며 시야 차단/무력화 유틸기입니다."
       },
-      customRadar: [7, 4, 10, 7, 6]
+      customRadar: [7, 4, 10, 7, 8]
     });
   }
 
@@ -197,16 +204,16 @@ function scanUnrealProject(projectOrContentPath) {
   const shirokoRpmPath = findAsset(p => p.includes('shirokoselectorlever'));
   const shirokoDmgPath = findAsset(p => p.includes('shirokoriflebulletdamage'));
   const shirokoMagPath = findAsset(p => p.includes('shirokomagazine'));
-  const shirokoSkill1Path = findAsset(p => p.includes('shirokodronedamage'));
-  const shirokoSkill2Path = findAsset(p => p.includes('shirokogrenadedamage'));
+  const shirokoDronePath = findAsset(p => p.includes('shirokodrone') || p.includes('ga_shirokodrone'));
+  const shirokoGrenadePath = findAsset(p => p.includes('shirokogrenade') || p.includes('ga_shirokogrenade'));
 
-  if (shirokoDmgPath || shirokoRpmPath || shirokoHealthPath) {
+  if (shirokoDmgPath || shirokoRpmPath || shirokoHealthPath || shirokoDronePath) {
     const hp = shirokoHealthPath ? extractHealthValue(shirokoHealthPath, 150) : 150;
     const rpm = shirokoRpmPath ? extractRpmValue(shirokoRpmPath, 700) : 700;
     const damage = shirokoDmgPath ? extractFloatValue(shirokoDmgPath, 13) : 13;
     const mag = shirokoMagPath ? extractMagValue(shirokoMagPath, 30) : 30;
-    const s1Dmg = shirokoSkill1Path ? extractFloatValue(shirokoSkill1Path, 25) : 25;
-    const s2Dmg = shirokoSkill2Path ? extractFloatValue(shirokoSkill2Path, 45) : 45;
+    const s1Dmg = shirokoDronePath ? extractFloatValue(shirokoDronePath, 25) : 25;
+    const s2Dmg = shirokoGrenadePath ? extractFloatValue(shirokoGrenadePath, 45) : 45;
 
     parsedCharacters.push({
       id: "Shiroko",
@@ -231,22 +238,30 @@ function scanUnrealProject(projectOrContentPath) {
       hasSecondaryWeapon: false,
       activeWeaponIndex: 0,
       skill1: {
-        name: "드론 소환: 화력 지원",
+        name: "전술 지원 드론 전개",
         damage: s1Dmg,
+        heal: 0,
         cooldown: 16,
-        castTime: 0.5
+        castTime: 0.5,
+        assetName: shirokoDronePath ? path.basename(shirokoDronePath) : "GA_ShirokoDrone.uasset",
+        skillRole: "damage",
+        description: "공중 지원 드론을 호출하여 적을 요격하고 지속 화력을 투사합니다."
       },
       skill2: {
-        name: "전술 유탄 투척",
+        name: "전술 수류탄 투척",
         damage: s2Dmg,
+        heal: 0,
         cooldown: 20,
-        castTime: 0.4
+        castTime: 0.4,
+        assetName: shirokoGrenadePath ? path.basename(shirokoGrenadePath) : "GA_ShirokoGrenade.uasset",
+        skillRole: "damage",
+        description: "고폭 수류탄을 전방으로 던져 강력한 폭발 범위 피해를 입힙니다."
       },
       customRadar: [8, 5, 7, 6, 5]
     });
   }
 
-  // 3. 타카나시 호시노 (Hoshino - 듀얼 무기 캐릭터)
+  // 3. 타카나시 호시노 (Hoshino - 태세 전환 & 가변 스킬 캐릭터)
   const hoshinoHealthPath = findAsset(p => p.includes('hoshinohealth'));
   const hoshinoRpmPath = findAsset(p => p.includes('hoshinoselectorlever') && !p.includes('pistol'));
   const hoshinoDmgPath = findAsset(p => p.includes('hoshinoshotgunbulletdamage') || p.includes('hosinoshotgunbulletdamage'));
@@ -257,11 +272,12 @@ function scanUnrealProject(projectOrContentPath) {
   const hoshinoPistolDmgPath = findAsset(p => p.includes('hoshinopistoldamage'));
   const hoshinoPistolMagPath = findAsset(p => p.includes('hoshinomagazine_pistol'));
 
-  // 스킬
-  const hoshinoSkill1Path = findAsset(p => p.includes('hoshinoflashbangdamage'));
-  const hoshinoSkill2Path = findAsset(p => p.includes('chargedamage'));
+  // 스킬 에셋 탐색
+  const hoshinoStancePath = findAsset(p => p.includes('hoshinostance') || p.includes('stanceswitch'));
+  const hoshinoChargePath = findAsset(p => p.includes('shieldcharge') || p.includes('chargedamage'));
+  const hoshinoSlugPath = findAsset(p => p.includes('slugshot') || p.includes('hoshinoflashbangdamage'));
 
-  if (hoshinoHealthPath || hoshinoDmgPath || hoshinoPistolDmgPath) {
+  if (hoshinoHealthPath || hoshinoDmgPath || hoshinoPistolDmgPath || hoshinoStancePath) {
     const hp = hoshinoHealthPath ? extractHealthValue(hoshinoHealthPath, 175) : 175;
     const rpm = hoshinoRpmPath ? extractRpmValue(hoshinoRpmPath, 80) : 80;
     const damage = hoshinoDmgPath ? extractFloatValue(hoshinoDmgPath, 11) : 11;
@@ -271,8 +287,8 @@ function scanUnrealProject(projectOrContentPath) {
     const pistolDamage = hoshinoPistolDmgPath ? extractFloatValue(hoshinoPistolDmgPath, 15) : 15;
     const pistolMag = hoshinoPistolMagPath ? extractMagValue(hoshinoPistolMagPath, 12) : 12;
 
-    const s1Dmg = hoshinoSkill1Path ? extractFloatValue(hoshinoSkill1Path, 10) : 10;
-    const s2Dmg = hoshinoSkill2Path ? extractFloatValue(hoshinoSkill2Path, 10) : 10;
+    const slugDmg = hoshinoSlugPath ? extractFloatValue(hoshinoSlugPath, 60) : 60;
+    const chargeDmg = hoshinoChargePath ? extractFloatValue(hoshinoChargePath, 20) : 20;
 
     parsedCharacters.push({
       id: "Hoshino",
@@ -297,7 +313,7 @@ function scanUnrealProject(projectOrContentPath) {
       hasSecondaryWeapon: true,
       activeWeaponIndex: 0,
       secondaryWeapon: {
-        name: "호시노 전술 피스톨",
+        name: "호시노 전술 피스톨 (방패 모드)",
         type: "HG",
         damage: pistolDamage,
         rpm: pistolRpm,
@@ -310,20 +326,55 @@ function scanUnrealProject(projectOrContentPath) {
         pelletCount: 1
       },
       skill1: {
-        name: "전술 진압 섬광탄",
-        damage: s1Dmg,
-        cooldown: 14,
-        castTime: 0.3
+        name: "태세 전환 (모드 변경)",
+        damage: 0,
+        heal: 0,
+        cooldown: 3,
+        castTime: 0.2,
+        assetName: hoshinoStancePath ? path.basename(hoshinoStancePath) : "GA_HoshinoStanceSwitch.uasset",
+        skillRole: "stance_switch",
+        isStanceSwitch: true,
+        description: "산탄총 모드와 방패 & 권총 모드를 즉각 전환합니다. 태세에 따라 스킬 2가 달라집니다."
       },
       skill2: {
-        name: "방패 전술 돌진",
-        damage: s2Dmg,
-        cooldown: 20,
-        castTime: 0.5
+        name: "특수 슬러그탄 사격",
+        damage: slugDmg,
+        heal: 0,
+        cooldown: 12,
+        castTime: 0.3,
+        assetName: hoshinoSlugPath ? path.basename(hoshinoSlugPath) : "GA_HoshinoSlugShot.uasset",
+        skillRole: "mode_variant",
+        description: "산탄총 모드 전용: 원거리 적을 관통하는 고화력 단일 슬러그탄을 발사합니다.",
+        variants: [
+          {
+            modeIndex: 0,
+            modeName: "산탄총 모드",
+            name: "특수 슬러그탄 사격",
+            damage: slugDmg,
+            heal: 0,
+            cooldown: 12,
+            castTime: 0.3,
+            assetName: "GA_HoshinoSlugShot.uasset",
+            description: "산탄총 모드 전용: 원거리 적을 관통하는 고화력 단일 슬러그탄을 발사합니다."
+          },
+          {
+            modeIndex: 1,
+            modeName: "방패 & 권총 모드",
+            name: "전술 방패 돌진 (진압)",
+            damage: chargeDmg,
+            heal: 0,
+            cooldown: 15,
+            castTime: 0.4,
+            assetName: "GA_HoshinoShieldCharge.uasset",
+            description: "방패 & 권총 모드 전용: 방패를 앞세워 급속 돌진하며 적을 밀쳐내고 강하게 제압합니다."
+          }
+        ]
       },
-      customRadar: [6, 10, 5, 4, 8]
+      customRadar: [6, 10, 5, 4, 9]
     });
   }
+
+
 
   // 4. 오쿠소라 아야네 (Ayane)
   const ayaneDmgPath = findAsset(p => p.includes('ayanepistolbulletdamage'));

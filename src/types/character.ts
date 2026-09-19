@@ -1,4 +1,17 @@
 export type SkillType = 'damage' | 'heal' | 'hybrid' | 'utility';
+export type SkillRole = 'dash' | 'utility' | 'damage' | 'heal' | 'stance_switch' | 'mode_variant';
+
+export interface ModeSkillVariant {
+  modeIndex: number; // 0: 기본/주무기 모드, 1: 전환/보조무기 모드
+  modeName: string;  // 예: "산탄총 모드", "방패 & 권총 모드"
+  name: string;      // 예: "특수 슬러그탄 사격", "전술 방패 돌진"
+  damage: number;
+  heal?: number;
+  cooldown?: number;
+  castTime?: number;
+  description?: string;
+  assetName?: string;
+}
 
 export interface SkillInfo {
   name: string;
@@ -7,6 +20,10 @@ export interface SkillInfo {
   cooldown?: number;
   castTime?: number;
   description?: string;
+  assetName?: string; // 연결된 .uasset 파일명 (예: BP_IzunaDashAbility.uasset)
+  skillRole?: SkillRole; // 스킬 핵심 역할
+  isStanceSwitch?: boolean; // 태세/모드 전환 스킬 여부
+  variants?: ModeSkillVariant[]; // 태세/모드에 따라 변경되는 가변 스킬 목록
 }
 
 export interface WeaponStats {

@@ -33,6 +33,24 @@ export function getActiveWeapon(char: Character) {
   };
 }
 
+export function getActiveSkill2(char: Character) {
+  if (char.skill2?.variants && char.skill2.variants.length > 0) {
+    const activeIdx = char.activeWeaponIndex || 0;
+    const variant = char.skill2.variants.find(v => v.modeIndex === activeIdx) || char.skill2.variants[0];
+    return {
+      ...char.skill2,
+      name: variant.name,
+      damage: variant.damage,
+      heal: variant.heal,
+      cooldown: variant.cooldown ?? char.skill2.cooldown,
+      castTime: variant.castTime ?? char.skill2.castTime,
+      description: variant.description ?? char.skill2.description,
+      assetName: variant.assetName ?? char.skill2.assetName
+    };
+  }
+  return char.skill2;
+}
+
 export function getRangedBaseDamage(char: Character, distance: number): number {
   const w = getActiveWeapon(char);
   const pellets = Math.max(1, w.pelletCount || 1);
@@ -159,10 +177,11 @@ export function analyzeCharacter(char: Character, env: CombatEnv): TTKResult {
   const s1CastTime = char.skill1?.castTime || 0;
   const s1Type = getSkillType(char.skill1);
 
-  const skill2Dmg = Math.max(0, char.skill2?.damage || 0);
-  const skill2Heal = Math.max(0, char.skill2?.heal || 0);
-  const s2CastTime = char.skill2?.castTime || 0;
-  const s2Type = getSkillType(char.skill2);
+  const activeS2 = getActiveSkill2(char);
+  const skill2Dmg = Math.max(0, activeS2?.damage || 0);
+  const skill2Heal = Math.max(0, activeS2?.heal || 0);
+  const s2CastTime = activeS2?.castTime || 0;
+  const s2Type = getSkillType(activeS2);
 
   const hasDamageSkill1 = skill1Dmg > 0;
   const hasDamageSkill2 = skill2Dmg > 0;
@@ -269,8 +288,10 @@ export function simulateDuel(charA: Character, charB: Character, env: CombatEnv)
   const ehpModA = Math.min(0.95, Math.max(0, charA.ehpMod || 0));
   const ehpModB = Math.min(0.95, Math.max(0, charB.ehpMod || 0));
 
-  const healA = Math.max(0, charA.skill1?.heal || 0) + Math.max(0, charA.skill2?.heal || 0);
-  const healB = Math.max(0, charB.skill1?.heal || 0) + Math.max(0, charB.skill2?.heal || 0);
+  const s2A = getActiveSkill2(charA);
+  const s2B = getActiveSkill2(charB);
+  const healA = Math.max(0, charA.skill1?.heal || 0) + Math.max(0, s2A?.heal || 0);
+  const healB = Math.max(0, charB.skill1?.heal || 0) + Math.max(0, s2B?.heal || 0);
 
   // 상대방이 꺾어야 하는 총 유효 체급 (체력 + 실드 + 힐량 반영)
   const targetEhpB = Math.round(((charB.hp || 0) + (charB.barrier || 0) + healB) / (1 - ehpModB));
