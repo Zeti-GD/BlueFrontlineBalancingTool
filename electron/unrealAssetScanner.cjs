@@ -39,30 +39,50 @@ function extractFloatValue(filePath, fallback = 0) {
   return fallback;
 }
 
-// 바이너리에서 SelectorLever RPM(uint16) 추출
-function extractRpmValue(filePath, fallback = 600) {
+// 바이너리에서 SelectorLever RPM(uint16) 및 조건부 가속 RPM(int16) 실시간 추출
+function extractRpmData(filePath, fallback = 600) {
   try {
     const buf = fs.readFileSync(filePath);
-    // 파일명 기반 고증/기본값 지정
-    const lower = filePath.toLowerCase();
-    let expected = fallback;
-    if (lower.includes('izuna')) expected = 575;
-    else if (lower.includes('shiroko')) expected = 700;
-    else if (lower.includes('hoshinopistol')) expected = 300;
-    else if (lower.includes('hoshino')) expected = 80;
-    else if (lower.includes('wakamo')) expected = 650;
-    else if (lower.includes('ayane')) expected = 380;
+    const validNumbers = [];
 
-    // 바이너리 내에서 expected 수치가 정확히 존재하는지 검증
-    for (let i = 5000; i < buf.length - 2; i++) {
-      const u16 = buf.readUInt16LE(i);
-      if (u16 === expected) {
-        return u16;
+    // 언리얼 TaggedProperty 패턴: [02 00 00 00 00] + 2바이트 값 (uint16/int16)
+    let p = 1000;
+    while (p < buf.length - 7) {
+      const idx = buf.indexOf(Buffer.from([0x02, 0x00, 0x00, 0x00, 0x00]), p);
+      if (idx === -1) break;
+      const val = buf.readUInt16LE(idx + 5);
+      if (val >= 10 && val <= 3500) {
+        validNumbers.push({ offset: idx, val });
       }
+      p = idx + 1;
     }
-    return expected;
+
+    if (validNumbers.length > 0) {
+      // 에셋에 직렬화된 마지막 유효 2바이트가 FirePerMinute (기본 RPM)
+      const baseRpm = validNumbers[validNumbers.length - 1].val;
+      let dynamicRpm = null;
+
+      // 만약 2개 이상의 수치가 존재하면 첫 번째 수치가 ConditionalModifiedRoundPerMinute (스킬 가속 RPM)
+      if (validNumbers.length >= 2) {
+        const candidate = validNumbers[validNumbers.length - 2].val;
+        if (candidate !== baseRpm && candidate >= 10 && candidate <= 3500) {
+          dynamicRpm = candidate;
+        }
+      }
+
+      return {
+        rpm: baseRpm,
+        dynamicRpm: dynamicRpm,
+        hasDynamicRpm: dynamicRpm !== null
+      };
+    }
   } catch (e) {}
-  return fallback;
+
+  return { rpm: fallback, dynamicRpm: null, hasDynamicRpm: false };
+}
+
+function extractRpmValue(filePath, fallback = 600) {
+  return extractRpmData(filePath, fallback).rpm;
 }
 
 // 바이너리에서 Health 추출
@@ -86,30 +106,26 @@ function extractHealthValue(filePath, fallback = 150) {
   return fallback;
 }
 
-// 바이너리에서 탄창(Magazine) 추출
+// 바이너리에서 탄창(Magazine MaximumAmmo uint16) 실시간 추출
 function extractMagValue(filePath, fallback = 30) {
   try {
-    const lower = filePath.toLowerCase();
-    if (lower.includes('shotgun') || (lower.includes('hoshino') && !lower.includes('pistol'))) {
-      return 8;
-    }
-    if (lower.includes('pistol')) {
-      return 12;
-    }
-    if (lower.includes('izuna') || lower.includes('shiroko')) {
-      return 30;
-    }
-    if (lower.includes('wakamo')) {
-      return 25;
-    }
     const buf = fs.readFileSync(filePath);
-    for (let i = 5000; i < buf.length - 4; i++) {
-      const i32 = buf.readInt32LE(i);
-      if (i32 === 30 || i32 === 20 || i32 === 25) {
-        return i32;
+    const validMags = [];
+    let p = 1000;
+    while (p < buf.length - 7) {
+      const idx = buf.indexOf(Buffer.from([0x02, 0x00, 0x00, 0x00, 0x00]), p);
+      if (idx === -1) break;
+      const val = buf.readUInt16LE(idx + 5);
+      if (val >= 1 && val <= 500) {
+        validMags.push(val);
       }
+      p = idx + 1;
     }
-    return fallback;
+
+    if (validMags.length > 0) {
+      // 마지막 유효 수치가 MaximumAmmo
+      return validMags[validMags.length - 1];
+    }
   } catch (e) {}
   return fallback;
 }
@@ -288,7 +304,7 @@ function scanUnrealProject(projectOrContentPath) {
 
     const pistolRpm = hoshinoPistolRpmPath ? extractRpmValue(hoshinoPistolRpmPath, 300) : 300;
     const pistolDamage = hoshinoPistolDmgPath ? extractFloatValue(hoshinoPistolDmgPath, 15) : 15;
-    const pistolMag = hoshinoPistolMagPath ? extractMagValue(hoshinoPistolMagPath, 12) : 12;
+    const pistolMag = hoshinoPistolMagPath ? extractMagValue(hoshinoPistolMagPath, 15) : 15;
 
     const slugDmg = hoshinoSlugPath ? extractFloatValue(hoshinoSlugPath, 60) : 60;
     const chargeDmg = hoshinoChargePath ? extractFloatValue(hoshinoChargePath, 20) : 20;
@@ -381,8 +397,13 @@ function scanUnrealProject(projectOrContentPath) {
 
   // 4. 오쿠소라 아야네 (Ayane)
   const ayaneDmgPath = findAsset(p => p.includes('ayanepistolbulletdamage'));
-  if (ayaneDmgPath) {
-    const damage = extractFloatValue(ayaneDmgPath, 14);
+  const ayaneRpmPath = findAsset(p => p.includes('ayaneselectorlever') || p.includes('ayanerpm'));
+  const ayaneMagPath = findAsset(p => p.includes('ayanemagazine') && !p.includes('gatling'));
+  if (ayaneDmgPath || ayaneRpmPath) {
+    const damage = ayaneDmgPath ? extractFloatValue(ayaneDmgPath, 14) : 14;
+    const rpm = ayaneRpmPath ? extractRpmValue(ayaneRpmPath, 900) : 900;
+    const mag = ayaneMagPath ? extractMagValue(ayaneMagPath, 13) : 13;
+
     parsedCharacters.push({
       id: "Ayane",
       name: "오쿠소라 아야네",
@@ -393,9 +414,9 @@ function scanUnrealProject(projectOrContentPath) {
       barrier: 30,
       speed: 520,
       damage: damage,
-      rpm: 380,
+      rpm: rpm,
       reloadTime: 1.0,
-      magazine: 15,
+      magazine: mag,
       ehpMod: 0.1,
       rangeMin: 15,
       rangeMax: 40,
@@ -420,66 +441,65 @@ function scanUnrealProject(projectOrContentPath) {
     });
   }
 
-  // 5. 코사카 와카모 (Wakamo)
+  // 5. 코사카 와카모 (Wakamo - 99식 소총 SR & 재 뿌리기 동적 가속 스킬)
   const wakamoAssets = allUassets.filter(p => p.toLowerCase().includes('wakamo'));
   if (wakamoAssets.length > 0) {
     const wakamoHealthPath = findAsset(p => p.includes('wakamohealth'));
-    const wakamoRpmPath = findAsset(p => p.includes('wakamoselectorlever') || p.includes('wakamorpm'));
-    const wakamoDmgPath = findAsset(p => p.includes('wakamoriflebulletdamage') || p.includes('wakamobulletdamage') || p.includes('wakamodamage'));
+    const wakamoRpmPath = findAsset(p => p.includes('wakamolever') || p.includes('wakamoselectorlever') || p.includes('wakamorpm'));
     const wakamoMagPath = findAsset(p => p.includes('wakamomagazine'));
-    const wakamoSkill1Path = findAsset(p => p.includes('wakamo') && (p.includes('skill1') || p.includes('petal') || p.includes('mark') || p.includes('ga_') || p.includes('ability')));
-    const wakamoSkill2Path = findAsset(p => p.includes('wakamo') && (p.includes('skill2') || p.includes('bomb') || p.includes('explosion') || p.includes('ult')));
+    const wakamoWakizashiDmgPath = findAsset(p => p.includes('wakamowakizashidamage') || p.includes('wakamobulletdamage') || p.includes('wakamodamage'));
+    const wakamoSkill1Path = findAsset(p => p.includes('pourash') || p.includes('wakamoskill1') || (p.includes('wakamo') && p.includes('ability')));
+    const wakamoSkill2Path = findAsset(p => p.includes('wakizashi') || p.includes('wakamoskill2'));
 
     const hp = wakamoHealthPath ? extractHealthValue(wakamoHealthPath, 140) : 140;
-    const rpm = wakamoRpmPath ? extractRpmValue(wakamoRpmPath, 650) : 650;
-    const damage = wakamoDmgPath ? extractFloatValue(wakamoDmgPath, 24) : 24;
-    const mag = wakamoMagPath ? extractMagValue(wakamoMagPath, 25) : 25;
-    const s1Dmg = wakamoSkill1Path ? extractFloatValue(wakamoSkill1Path, 25) : 25;
-    const s2Dmg = wakamoSkill2Path ? extractFloatValue(wakamoSkill2Path, 60) : 60;
+    // uasset 바이너리에서 FirePerMinute(75)와 ConditionalModifiedRoundPerMinute(150) 실시간 추출
+    const rpmData = wakamoRpmPath ? extractRpmData(wakamoRpmPath, 75) : { rpm: 75, dynamicRpm: 150, hasDynamicRpm: true };
+    const mag = wakamoMagPath ? extractMagValue(wakamoMagPath, 7) : 7;
+    const s2Dmg = wakamoWakizashiDmgPath ? extractFloatValue(wakamoWakizashiDmgPath, 44) : 44;
 
     parsedCharacters.push({
       id: "Wakamo",
       name: "코사카 와카모",
       position: "스트라이커",
-      weaponName: "진홍빛 꽃잎",
-      weaponType: "AR",
+      weaponName: "진홍빛 꽃잎 (99식 소총)",
+      weaponType: "SR",
       hp: hp,
       barrier: 0,
-      speed: 500,
-      damage: damage,
-      rpm: rpm,
-      reloadTime: 1.2,
-      magazine: mag,
+      speed: 490,
+      damage: s2Dmg, // SR 저격탄 기준 대미지
+      rpm: rpmData.rpm, // 기본 75 RPM
+      reloadTime: 1.5,
+      magazine: mag, // 실측 7발
       ehpMod: 0,
-      rangeMin: 20,
-      rangeMax: 50,
+      rangeMin: 30,
+      rangeMax: 75,
       minDmgRatio: 0.4,
-      headshotMultiplier: 1.5,
+      headshotMultiplier: 2.0,
       isClosedChamber: true,
       pelletCount: 1,
       hasSecondaryWeapon: false,
       activeWeaponIndex: 0,
       skill1: {
-        name: "심홍의 낙인",
-        damage: s1Dmg,
+        name: "재 뿌리기 (Pour Ash)",
+        damage: 0,
         heal: 0,
-        cooldown: 14,
-        castTime: 0.3,
-        assetName: wakamoSkill1Path ? path.basename(wakamoSkill1Path) : "GA_WakamoSkill1.uasset",
-        skillRole: "damage",
-        description: "전방의 대상에게 심홍의 꽃잎 낙인을 부여하고 지속 피해를 입힙니다."
+        cooldown: 12,
+        castTime: 0.2,
+        assetName: wakamoSkill1Path ? path.basename(wakamoSkill1Path) : "MFGAWakamoPourAsh.uasset",
+        skillRole: "utility",
+        description: `총기 활성화 상태를 부여하여 사격 연사력을 기본 ${rpmData.rpm} RPM에서 ${rpmData.dynamicRpm || 150} RPM(2배 가속)으로 대폭 강화합니다.`
       },
       skill2: {
-        name: "진홍빛 비산",
+        name: "전술 와키자시 투척",
         damage: s2Dmg,
         heal: 0,
-        cooldown: 22,
-        castTime: 0.5,
-        assetName: wakamoSkill2Path ? path.basename(wakamoSkill2Path) : "GA_WakamoSkill2.uasset",
+        cooldown: 16,
+        castTime: 0.3,
+        assetName: wakamoSkill2Path ? path.basename(wakamoSkill2Path) : "DA_WakamoWakizashiDamage.uasset",
         skillRole: "damage",
-        description: "응축된 화력을 폭발적으로 방출하여 강력한 광역 피해를 입힙니다."
+        description: "전방으로 전술 단검 투사체를 던져 적을 관통하고 강력한 폭발성 물리 피해를 입힙니다."
       },
-      customRadar: [9, 4, 7, 5, 6]
+      customRadar: [9, 4, 7, 5, 8]
     });
   }
 
@@ -565,13 +585,26 @@ function scanUnrealProject(projectOrContentPath) {
 
     let charKey = null;
 
-    // 3) 명시적 캐릭터 블루프린트 (예: BP_Character_Aru)
-    const bpCharMatch = filename.match(/^BP_Character_([A-Za-z0-9]+)$/i);
-    if (bpCharMatch) {
-      charKey = bpCharMatch[1].toLowerCase();
+    // 3) 최우선: MolluFPS 언리얼 플레이어 캐릭터 표준 규칙 (BP_CR<Name>.uasset)
+    const bpCrMatch = filename.match(/^BP_CR([A-Za-z0-9]+)$/i);
+    if (bpCrMatch) {
+      const candidate = bpCrMatch[1].toLowerCase();
+      // 베이스 클래스 및 테스트용 블루프린트 제외
+      const ignoredCr = ['base', 'classiccharacter', 'test', 'dummy', 'shirokoshotguntest'];
+      if (!ignoredCr.includes(candidate)) {
+        charKey = candidate;
+      }
     }
 
-    // 4) BP_<캐릭터명> 형태 검사 (예: BP_Aru, BP_Mika)
+    // 4) 표준 명시적 캐릭터 블루프린트 (예: BP_Character_Aru)
+    if (!charKey) {
+      const bpCharMatch = filename.match(/^BP_Character_([A-Za-z0-9]+)$/i);
+      if (bpCharMatch) {
+        charKey = bpCharMatch[1].toLowerCase();
+      }
+    }
+
+    // 5) BP_<캐릭터명> 형태 검사 (예: BP_Aru, BP_Mika)
     if (!charKey) {
       const bpSimpleMatch = filename.match(/^BP_([A-Za-z0-9]+)$/i);
       if (bpSimpleMatch) {
@@ -583,7 +616,7 @@ function scanUnrealProject(projectOrContentPath) {
       }
     }
 
-    // 5) 사전 등록된 캐릭터 키와 완전히 일치하는 에셋명인 경우
+    // 6) 사전 등록된 캐릭터 키와 완전히 일치하는 에셋명인 경우
     if (!charKey) {
       for (const nameKey of Object.keys(KNOWN_CHARACTER_NAMES)) {
         if (lower === nameKey || lower === `character_${nameKey}`) {
@@ -603,7 +636,7 @@ function scanUnrealProject(projectOrContentPath) {
     }
   }
 
-  // 감지된 각 신규 캐릭터 처리
+  // 감지된 각 신규 캐릭터 처리 (실시간 바이너리 분석 기반 자동 분류)
   for (const [key, assets] of candidateKeys.entries()) {
     knownRegisteredIds.add(key);
     const capitalizedId = key.charAt(0).toUpperCase() + key.slice(1);
@@ -617,17 +650,17 @@ function scanUnrealProject(projectOrContentPath) {
 
     // 대미지 에셋
     const dmgAsset = findCharAsset(p => p.includes('damage'));
-    const damage = dmgAsset ? extractFloatValue(dmgAsset, 20) : 20;
+    const damage = dmgAsset ? extractFloatValue(dmgAsset, 24) : 24;
 
-    // RPM 에셋
-    const rpmAsset = findCharAsset(p => p.includes('selectorlever') || p.includes('rpm'));
-    const rpm = rpmAsset ? extractRpmValue(rpmAsset, 600) : 600;
+    // RPM 에셋 (기본 RPM 및 가변 RPM 실시간 추출)
+    const rpmAsset = findCharAsset(p => p.includes('lever') || p.includes('selectorlever') || p.includes('rpm'));
+    const rpmData = rpmAsset ? extractRpmData(rpmAsset, 600) : { rpm: 600, dynamicRpm: null, hasDynamicRpm: false };
 
-    // 탄창 에셋
+    // 탄창 에셋 (실제 uasset 바이너리에서 MaximumAmmo 추출)
     const magAsset = findCharAsset(p => p.includes('magazine') || p.includes('mag'));
     const mag = magAsset ? extractMagValue(magAsset, 30) : 30;
 
-    // 무기 타입 추정
+    // 무기 타입 자동 판별 및 스펙 보정
     let weaponType = "AR";
     let speed = 500;
     let rangeMin = 20;
@@ -635,11 +668,11 @@ function scanUnrealProject(projectOrContentPath) {
     let headshotMultiplier = 1.4;
 
     const allAssetsStr = assets.join(' ').toLowerCase();
-    if (allAssetsStr.includes('sniper') || allAssetsStr.includes('sr')) {
+    if (allAssetsStr.includes('99rifle') || allAssetsStr.includes('sniper') || allAssetsStr.includes('sr')) {
       weaponType = "SR";
-      speed = 460;
-      rangeMin = 35;
-      rangeMax = 80;
+      speed = 470;
+      rangeMin = 30;
+      rangeMax = 75;
       headshotMultiplier = 2.0;
     } else if (allAssetsStr.includes('shotgun') || allAssetsStr.includes('sg')) {
       weaponType = "SG";
@@ -664,11 +697,16 @@ function scanUnrealProject(projectOrContentPath) {
     // 스킬 에셋 탐색
     const skillAssets = assets.filter(p => {
       const l = p.toLowerCase();
-      return l.includes('ga_') || l.includes('ability') || l.includes('skill');
+      return l.includes('ga_') || l.includes('ability') || l.includes('skill') || l.includes('projectile');
     });
 
     const s1Asset = skillAssets[0];
     const s2Asset = skillAssets[1];
+
+    // 가변 RPM 기믹이 있는 경우 스킬1 설명에 자동 연동
+    const s1Desc = rpmData.hasDynamicRpm
+      ? `사격 연사력을 기본 ${rpmData.rpm} RPM에서 ${rpmData.dynamicRpm} RPM으로 동적 가속합니다.`
+      : "전술 액티브 스킬을 발동합니다.";
 
     parsedCharacters.push({
       id: capitalizedId,
@@ -680,8 +718,8 @@ function scanUnrealProject(projectOrContentPath) {
       barrier: 0,
       speed: speed,
       damage: damage,
-      rpm: rpm,
-      reloadTime: 1.0,
+      rpm: rpmData.rpm,
+      reloadTime: weaponType === "SR" ? 1.5 : 1.0,
       magazine: mag,
       ehpMod: 0,
       rangeMin: rangeMin,
@@ -694,20 +732,20 @@ function scanUnrealProject(projectOrContentPath) {
       activeWeaponIndex: 0,
       skill1: {
         name: s1Asset ? path.basename(s1Asset, '.uasset').replace(/^(?:GA_|BP_)/i, '') : "전술 스킬 1",
-        damage: s1Asset ? extractFloatValue(s1Asset, 20) : 20,
+        damage: s1Asset ? extractFloatValue(s1Asset, 0) : 0,
         heal: 0,
         cooldown: 15,
         castTime: 0.3,
         assetName: s1Asset ? path.basename(s1Asset) : "GA_Skill1.uasset",
-        skillRole: "damage",
-        description: "전술 액티브 스킬을 발동합니다."
+        skillRole: rpmData.hasDynamicRpm ? "utility" : "damage",
+        description: s1Desc
       },
       skill2: {
         name: s2Asset ? path.basename(s2Asset, '.uasset').replace(/^(?:GA_|BP_)/i, '') : "전술 스킬 2",
-        damage: s2Asset ? extractFloatValue(s2Asset, 50) : 50,
+        damage: s2Asset ? extractFloatValue(s2Asset, 40) : 40,
         heal: 0,
-        cooldown: 25,
-        castTime: 0.5,
+        cooldown: 20,
+        castTime: 0.4,
         assetName: s2Asset ? path.basename(s2Asset) : "GA_Skill2.uasset",
         skillRole: "damage",
         description: "강력한 특수 스킬을 전개합니다."
