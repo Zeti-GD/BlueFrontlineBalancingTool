@@ -73,7 +73,7 @@ function extractHealthValue(filePath, fallback = 150) {
     let expected = fallback;
     if (lower.includes('hoshino')) expected = 175;
     else if (lower.includes('izuna') || lower.includes('shiroko')) expected = 150;
-    else if (lower.includes('ayane')) expected = 140;
+    else if (lower.includes('ayane') || lower.includes('wakamo')) expected = 140;
 
     for (let i = 5000; i < buf.length - 4; i++) {
       const f = buf.readFloatLE(i);
@@ -99,10 +99,13 @@ function extractMagValue(filePath, fallback = 30) {
     if (lower.includes('izuna') || lower.includes('shiroko')) {
       return 30;
     }
+    if (lower.includes('wakamo')) {
+      return 25;
+    }
     const buf = fs.readFileSync(filePath);
     for (let i = 5000; i < buf.length - 4; i++) {
       const i32 = buf.readInt32LE(i);
-      if (i32 === 30 || i32 === 20) {
+      if (i32 === 30 || i32 === 20 || i32 === 25) {
         return i32;
       }
     }
@@ -414,6 +417,270 @@ function scanUnrealProject(projectOrContentPath) {
         castTime: 0.8
       },
       customRadar: [5, 6, 6, 4, 9]
+    });
+  }
+
+  // 5. 코사카 와카모 (Wakamo)
+  const wakamoAssets = allUassets.filter(p => p.toLowerCase().includes('wakamo'));
+  if (wakamoAssets.length > 0) {
+    const wakamoHealthPath = findAsset(p => p.includes('wakamohealth'));
+    const wakamoRpmPath = findAsset(p => p.includes('wakamoselectorlever') || p.includes('wakamorpm'));
+    const wakamoDmgPath = findAsset(p => p.includes('wakamoriflebulletdamage') || p.includes('wakamobulletdamage') || p.includes('wakamodamage'));
+    const wakamoMagPath = findAsset(p => p.includes('wakamomagazine'));
+    const wakamoSkill1Path = findAsset(p => p.includes('wakamo') && (p.includes('skill1') || p.includes('petal') || p.includes('mark') || p.includes('ga_') || p.includes('ability')));
+    const wakamoSkill2Path = findAsset(p => p.includes('wakamo') && (p.includes('skill2') || p.includes('bomb') || p.includes('explosion') || p.includes('ult')));
+
+    const hp = wakamoHealthPath ? extractHealthValue(wakamoHealthPath, 140) : 140;
+    const rpm = wakamoRpmPath ? extractRpmValue(wakamoRpmPath, 650) : 650;
+    const damage = wakamoDmgPath ? extractFloatValue(wakamoDmgPath, 24) : 24;
+    const mag = wakamoMagPath ? extractMagValue(wakamoMagPath, 25) : 25;
+    const s1Dmg = wakamoSkill1Path ? extractFloatValue(wakamoSkill1Path, 25) : 25;
+    const s2Dmg = wakamoSkill2Path ? extractFloatValue(wakamoSkill2Path, 60) : 60;
+
+    parsedCharacters.push({
+      id: "Wakamo",
+      name: "코사카 와카모",
+      position: "스트라이커",
+      weaponName: "진홍빛 꽃잎",
+      weaponType: "AR",
+      hp: hp,
+      barrier: 0,
+      speed: 500,
+      damage: damage,
+      rpm: rpm,
+      reloadTime: 1.2,
+      magazine: mag,
+      ehpMod: 0,
+      rangeMin: 20,
+      rangeMax: 50,
+      minDmgRatio: 0.4,
+      headshotMultiplier: 1.5,
+      isClosedChamber: true,
+      pelletCount: 1,
+      hasSecondaryWeapon: false,
+      activeWeaponIndex: 0,
+      skill1: {
+        name: "심홍의 낙인",
+        damage: s1Dmg,
+        heal: 0,
+        cooldown: 14,
+        castTime: 0.3,
+        assetName: wakamoSkill1Path ? path.basename(wakamoSkill1Path) : "GA_WakamoSkill1.uasset",
+        skillRole: "damage",
+        description: "전방의 대상에게 심홍의 꽃잎 낙인을 부여하고 지속 피해를 입힙니다."
+      },
+      skill2: {
+        name: "진홍빛 비산",
+        damage: s2Dmg,
+        heal: 0,
+        cooldown: 22,
+        castTime: 0.5,
+        assetName: wakamoSkill2Path ? path.basename(wakamoSkill2Path) : "GA_WakamoSkill2.uasset",
+        skillRole: "damage",
+        description: "응축된 화력을 폭발적으로 방출하여 강력한 광역 피해를 입힙니다."
+      },
+      customRadar: [9, 4, 7, 5, 6]
+    });
+  }
+
+  // 6. [동적 자동 감지 엔진] 향후 새롭게 추가되는 모든 캐릭터 자동 식별
+  const KNOWN_CHARACTER_NAMES = {
+    wakamo: "코사카 와카모",
+    nonomi: "이자요이 노노미",
+    serika: "쿠로미 세리카",
+    aru: "리쿠하치마 아루",
+    kayoko: "오니카타 카요코",
+    mutsuki: "아사기 무츠키",
+    haruka: "이구사 하루카",
+    hifumi: "아지타니 히후미",
+    azusa: "시라스 아즈사",
+    hanako: "우라와 하나코",
+    koharu: "시모에 코하루",
+    yuuka: "하야세 유우카",
+    noa: "우시오 노아",
+    koyuki: "쿠로사키 코유키",
+    aris: "텐도 아리스",
+    alice: "텐도 아리스",
+    midori: "사이바 미도리",
+    momoi: "사이바 모모이",
+    yuzu: "하나오카 유즈",
+    neru: "미카모 네루",
+    karin: "카쿠다테 카린",
+    asuna: "이치노세 아스나",
+    akane: "무로타 아카네",
+    toki: "아스마 토키",
+    mika: "미소노 미카",
+    nagisa: "키리후지 나기사",
+    seia: "유리즈카 세이아",
+    saori: "조마에 사오리",
+    hiyori: "츠치нага 히요리",
+    misaki: "이마시노 미사키",
+    atsuko: "하카리 아츠코",
+    ui: "코제키 우이",
+    hinata: "오마가리 히나타",
+    sakurako: "우타즈미 사쿠라코",
+    mari: "이오치 마리",
+    mine: "아오모리 미네",
+    reisa: "우자와 레이사",
+    kazusa: "쿄야마 카즈사",
+    natsu: "유토리 나츠",
+    airi: "쿠리무라 아이리",
+    yoshimi: "이바라기 요시미",
+    hina: "소라사키 히나",
+    iori: "은비관 이오리",
+    chinatsu: "히노미야 치나츠",
+    ako: "아마우 아코"
+  };
+
+  const knownRegisteredIds = new Set(parsedCharacters.map(c => c.id.toLowerCase()));
+  const candidateKeys = new Map();
+
+  for (const assetPath of allUassets) {
+    const filename = path.basename(assetPath, path.extname(assetPath));
+    const lower = filename.toLowerCase();
+
+    // 1) BP_Character_ 또는 BP_ 패턴 추출
+    let charKey = null;
+    const bpMatch = filename.match(/^BP_(?:Character_)?([A-Za-z0-9]+)/i);
+    if (bpMatch) {
+      charKey = bpMatch[1].toLowerCase();
+    }
+
+    // 2) 블루아카이브 캐릭터 사전 매칭
+    if (!charKey) {
+      for (const nameKey of Object.keys(KNOWN_CHARACTER_NAMES)) {
+        if (lower.includes(nameKey)) {
+          charKey = nameKey;
+          break;
+        }
+      }
+    }
+
+    // 시스템 및 유틸리티 단어 필터링
+    const ignoredKeywords = [
+      'camera', 'controller', 'hud', 'widget', 'projectile', 'gamemode', 
+      'player', 'enemy', 'ai', 'base', 'test', 'dummy', 'weapon', 'item', 
+      'bullet', 'effect', 'common', 'stance', 'level', 'map', 'audio', 'sound'
+    ];
+
+    if (charKey && !ignoredKeywords.includes(charKey) && !knownRegisteredIds.has(charKey)) {
+      if (!candidateKeys.has(charKey)) {
+        candidateKeys.set(charKey, []);
+      }
+      candidateKeys.get(charKey).push(assetPath);
+    }
+  }
+
+  // 감지된 각 신규 캐릭터 처리
+  for (const [key, assets] of candidateKeys.entries()) {
+    knownRegisteredIds.add(key);
+    const capitalizedId = key.charAt(0).toUpperCase() + key.slice(1);
+    const displayName = KNOWN_CHARACTER_NAMES[key] || capitalizedId;
+
+    const findCharAsset = (predicate) => assets.find(p => predicate(p.toLowerCase()));
+
+    // 체력 에셋
+    const healthAsset = findCharAsset(p => p.includes('health'));
+    const hp = healthAsset ? extractHealthValue(healthAsset, 150) : 150;
+
+    // 대미지 에셋
+    const dmgAsset = findCharAsset(p => p.includes('damage'));
+    const damage = dmgAsset ? extractFloatValue(dmgAsset, 20) : 20;
+
+    // RPM 에셋
+    const rpmAsset = findCharAsset(p => p.includes('selectorlever') || p.includes('rpm'));
+    const rpm = rpmAsset ? extractRpmValue(rpmAsset, 600) : 600;
+
+    // 탄창 에셋
+    const magAsset = findCharAsset(p => p.includes('magazine') || p.includes('mag'));
+    const mag = magAsset ? extractMagValue(magAsset, 30) : 30;
+
+    // 무기 타입 추정
+    let weaponType = "AR";
+    let speed = 500;
+    let rangeMin = 20;
+    let rangeMax = 50;
+    let headshotMultiplier = 1.4;
+
+    const allAssetsStr = assets.join(' ').toLowerCase();
+    if (allAssetsStr.includes('sniper') || allAssetsStr.includes('sr')) {
+      weaponType = "SR";
+      speed = 460;
+      rangeMin = 35;
+      rangeMax = 80;
+      headshotMultiplier = 2.0;
+    } else if (allAssetsStr.includes('shotgun') || allAssetsStr.includes('sg')) {
+      weaponType = "SG";
+      speed = 500;
+      rangeMin = 10;
+      rangeMax = 30;
+      headshotMultiplier = 1.5;
+    } else if (allAssetsStr.includes('smg')) {
+      weaponType = "SMG";
+      speed = 540;
+      rangeMin = 12;
+      rangeMax = 35;
+      headshotMultiplier = 1.25;
+    } else if (allAssetsStr.includes('pistol') || allAssetsStr.includes('hg')) {
+      weaponType = "HG";
+      speed = 520;
+      rangeMin = 15;
+      rangeMax = 40;
+      headshotMultiplier = 1.75;
+    }
+
+    // 스킬 에셋 탐색
+    const skillAssets = assets.filter(p => {
+      const l = p.toLowerCase();
+      return l.includes('ga_') || l.includes('ability') || l.includes('skill');
+    });
+
+    const s1Asset = skillAssets[0];
+    const s2Asset = skillAssets[1];
+
+    parsedCharacters.push({
+      id: capitalizedId,
+      name: displayName,
+      position: "스트라이커",
+      weaponName: `${displayName} 전술 무기`,
+      weaponType: weaponType,
+      hp: hp,
+      barrier: 0,
+      speed: speed,
+      damage: damage,
+      rpm: rpm,
+      reloadTime: 1.0,
+      magazine: mag,
+      ehpMod: 0,
+      rangeMin: rangeMin,
+      rangeMax: rangeMax,
+      minDmgRatio: 0.4,
+      headshotMultiplier: headshotMultiplier,
+      isClosedChamber: true,
+      pelletCount: weaponType === "SG" ? 8 : 1,
+      hasSecondaryWeapon: false,
+      activeWeaponIndex: 0,
+      skill1: {
+        name: s1Asset ? path.basename(s1Asset, '.uasset').replace(/^(?:GA_|BP_)/i, '') : "전술 스킬 1",
+        damage: s1Asset ? extractFloatValue(s1Asset, 20) : 20,
+        heal: 0,
+        cooldown: 15,
+        castTime: 0.3,
+        assetName: s1Asset ? path.basename(s1Asset) : "GA_Skill1.uasset",
+        skillRole: "damage",
+        description: "전술 액티브 스킬을 발동합니다."
+      },
+      skill2: {
+        name: s2Asset ? path.basename(s2Asset, '.uasset').replace(/^(?:GA_|BP_)/i, '') : "전술 스킬 2",
+        damage: s2Asset ? extractFloatValue(s2Asset, 50) : 50,
+        heal: 0,
+        cooldown: 25,
+        castTime: 0.5,
+        assetName: s2Asset ? path.basename(s2Asset) : "GA_Skill2.uasset",
+        skillRole: "damage",
+        description: "강력한 특수 스킬을 전개합니다."
+      },
+      customRadar: [7, 6, 7, 5, 6]
     });
   }
 
