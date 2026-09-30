@@ -535,39 +535,71 @@ function scanUnrealProject(projectOrContentPath) {
   const knownRegisteredIds = new Set(parsedCharacters.map(c => c.id.toLowerCase()));
   const candidateKeys = new Map();
 
+  // 스킬, 어빌리티, 무기 부속, 발사체, 이펙트 등 캐릭터 본체가 아닌 에셋 키워드
+  const NON_CHARACTER_KEYWORDS = [
+    'ability', 'skill', 'ga_', 'ge_', 'dash', 'grenade', 'drone', 'shuriken', 
+    'bomb', 'slug', 'charge', 'stance', 'shield', 'heal', 'buff', 'debuff', 
+    'projectile', 'bullet', 'weapon', 'pistol', 'rifle', 'shotgun', 'smg', 'sniper',
+    'selectorlever', 'magazine', 'mag', 'damage', 'health', 'rpm',
+    'effect', 'fx', 'vfx', 'sfx', 'anim', 'montage', 'camera', 'controller', 
+    'hud', 'widget', 'gamemode', 'player', 'enemy', 'ai', 'base', 'test', 'dummy', 
+    'item', 'common', 'level', 'map', 'audio', 'sound', 'ui', 'menu', 'pick', 
+    'wallclimb', 'mfa_'
+  ];
+
   for (const assetPath of allUassets) {
     const filename = path.basename(assetPath, path.extname(assetPath));
     const lower = filename.toLowerCase();
 
-    // 1) BP_Character_ 또는 BP_ 패턴 추출
-    let charKey = null;
-    const bpMatch = filename.match(/^BP_(?:Character_)?([A-Za-z0-9]+)/i);
-    if (bpMatch) {
-      charKey = bpMatch[1].toLowerCase();
+    // 1) 스킬이나 시스템, 부속 에셋 키워드가 포함된 파일은 절대 독립 캐릭터 키로 인식하지 않음
+    const hasNonCharKeyword = NON_CHARACTER_KEYWORDS.some(kw => lower.includes(kw));
+    if (hasNonCharKeyword) {
+      continue;
     }
 
-    // 2) 블루아카이브 캐릭터 사전 매칭
+    // 2) 이미 1~5번 등 앞서 등록된 기본 캐릭터의 이름이 포함되어 있다면 중복 캐릭터 생성 방지
+    const isAlreadyKnown = Array.from(knownRegisteredIds).some(knownId => lower.includes(knownId));
+    if (isAlreadyKnown) {
+      continue;
+    }
+
+    let charKey = null;
+
+    // 3) 명시적 캐릭터 블루프린트 (예: BP_Character_Aru)
+    const bpCharMatch = filename.match(/^BP_Character_([A-Za-z0-9]+)$/i);
+    if (bpCharMatch) {
+      charKey = bpCharMatch[1].toLowerCase();
+    }
+
+    // 4) BP_<캐릭터명> 형태 검사 (예: BP_Aru, BP_Mika)
+    if (!charKey) {
+      const bpSimpleMatch = filename.match(/^BP_([A-Za-z0-9]+)$/i);
+      if (bpSimpleMatch) {
+        const potentialKey = bpSimpleMatch[1].toLowerCase();
+        // 블루아카이브 공식 캐릭터 사전에 등록된 이름이거나 명확한 캐릭터인 경우만 인정
+        if (KNOWN_CHARACTER_NAMES[potentialKey]) {
+          charKey = potentialKey;
+        }
+      }
+    }
+
+    // 5) 사전 등록된 캐릭터 키와 완전히 일치하는 에셋명인 경우
     if (!charKey) {
       for (const nameKey of Object.keys(KNOWN_CHARACTER_NAMES)) {
-        if (lower.includes(nameKey)) {
+        if (lower === nameKey || lower === `character_${nameKey}`) {
           charKey = nameKey;
           break;
         }
       }
     }
 
-    // 시스템 및 유틸리티 단어 필터링
-    const ignoredKeywords = [
-      'camera', 'controller', 'hud', 'widget', 'projectile', 'gamemode', 
-      'player', 'enemy', 'ai', 'base', 'test', 'dummy', 'weapon', 'item', 
-      'bullet', 'effect', 'common', 'stance', 'level', 'map', 'audio', 'sound'
-    ];
-
-    if (charKey && !ignoredKeywords.includes(charKey) && !knownRegisteredIds.has(charKey)) {
+    // 유효한 순수 캐릭터 키인 경우 후보 등록
+    if (charKey && !knownRegisteredIds.has(charKey)) {
       if (!candidateKeys.has(charKey)) {
-        candidateKeys.set(charKey, []);
+        // 해당 캐릭터와 연관된 모든 에셋(스킬, 무기, 스탯 등)을 전체 목록에서 수집
+        const charRelatedAssets = allUassets.filter(p => p.toLowerCase().includes(charKey));
+        candidateKeys.set(charKey, charRelatedAssets);
       }
-      candidateKeys.get(charKey).push(assetPath);
     }
   }
 
